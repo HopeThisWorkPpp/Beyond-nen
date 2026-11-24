@@ -1,4 +1,4 @@
--- Zentynal Hub (Beyond Nen)
+-- Zentynal Hub (Beyond Nen) - Full with Story Automation
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -59,7 +59,7 @@ end
 
 local function isLibSource(s)
 	return type(s) == "string"
-		and s:find("MythiOs UI Library", 1, true) -- Keep this, the UI lib from server is still called MythiOs
+		and s:find("MythiOs UI Library", 1, true) 
 		and s:find("api:Toggle", 1, true)
 		and s:find("return Library", 1, true)
 		and not s:find("premium", 1, true)
@@ -330,12 +330,61 @@ task.spawn(function()
 		end
 	end
 end)
-local questId, autoQuest = "KillForestBrawler", false
-local function questMob(qid)
-	if qid:sub(1, 4) == "Kill" then
-		return (qid:sub(5):gsub("(%u)", " %1"):gsub("^%s", ""))
+
+-- ============================================================
+-- AUTO QUEST (Board Quests) — Rewritten from dump
+-- ============================================================
+local BOARDS = {
+	WhaleIslandTown   = { name = "Whale Island Town Quest Board",   npc = "Sarah"   },
+	CrimsonCamp       = { name = "Crimson Camp Quest Board",         npc = "Zeal"    },
+	Farm              = { name = "Farm Quest Board",                 npc = "Roger"   },
+	BlickCastle       = { name = "Blick Castle Quest board",         npc = "Nora"    },
+	Mines             = { name = "Mines Quest Board",                npc = "Jacob"   },
+	WhaleIslandBeach  = { name = "Whale Island Beach Quest Board",   npc = "Kato"    },
+	DeepForest        = { name = "Deep Forest Quest Board",          npc = "Lily"    },
+	Swamp             = { name = "Swamp Quest board",                npc = "Victor"  },
+	VolcanicArea      = { name = "Volcanic Area Quest Board",        npc = "Florence"},
+}
+
+local boardCache = {}   
+local function scanBoards()
+	local world = workspace:FindFirstChild("World")
+	local qbs = world and world:FindFirstChild("Quest Boards")
+	if not qbs then return end
+	for _, board in pairs(qbs:GetChildren()) do
+		local interactor = board:FindFirstChild("Interactor")
+		local boardFolder = board:FindFirstChild("Board")
+		local pp = interactor and interactor:FindFirstChildWhichIsA("ProximityPrompt", true)
+		if not (boardFolder and pp) then continue end
+		local quests = {}
+		for _, slot in pairs(boardFolder:GetChildren()) do
+			local qid = slot:GetAttribute("Quest")
+			if type(qid) == "string" and #qid > 0 then
+				table.insert(quests, qid)
+			end
+		end
+		boardCache[board.Name] = { pp = pp, quests = quests, board = board }
 	end
 end
+
+local function findBoardForQuest(qid)
+	if not next(boardCache) then scanBoards() end
+	for _, data in pairs(boardCache) do
+		for _, q in pairs(data.quests) do
+			if q == qid then return data.board, data.pp end
+		end
+	end
+	local world = workspace:FindFirstChild("World")
+	local root = (world and world:FindFirstChild("Quest Boards")) or workspace
+	for _, d in pairs(root:GetDescendants()) do
+		if d:GetAttribute("Quest") == qid then
+			local b = d:FindFirstAncestorOfClass("Model")
+			local p = b and (b:FindFirstChild("Interactor", true) or b):FindFirstChildWhichIsA("ProximityPrompt", true)
+			if b and p then return b, p end
+		end
+	end
+end
+
 local function activeQuests()
 	local d = lp:FindFirstChild("Data")
 	local ss = d and d:FindFirstChild("SavesSlot")
@@ -343,92 +392,277 @@ local function activeQuests()
 	local pd = slot and slot:FindFirstChild("PlayerData")
 	return pd and pd:FindFirstChild("ActiveQuests")
 end
-local function findBoard(qid)
-	local world = workspace:FindFirstChild("World")
-	local root = (world and world:FindFirstChild("Quest Boards")) or workspace
-	for _, d in pairs(root:GetDescendants()) do
-		if d:GetAttribute("Quest") == qid then
-			local b = d:FindFirstAncestorOfClass("Model")
-			local pp = b and (b:FindFirstChild("Interactor", true) or b):FindFirstChildWhichIsA("ProximityPrompt", true)
-			if b and pp then return b, pp end
-		end
+
+local function getQuestStage(qid)
+	local aq = activeQuests()
+	local q = aq and aq:FindFirstChild(qid)
+	if not q then
+		q = aq and aq:FindFirstChild(qid:sub(5))
 	end
+	if not q then return nil, 0, 0 end
+	local stage = q:GetAttribute("stage") or 1
+	local progress = q:GetAttribute("stage_progress") or 0
+	return q, stage, progress
 end
+
 local function acceptQuest(qid)
-	local board, pp = findBoard(qid)
-	if not (board and pp) then return false end
-	questBusy = true 
-	local c = char()
-	local bp = pp.Parent:IsA("BasePart") and pp.Parent.Position or board:GetPivot().Position
-	for i = 1, 4 do
-		if c and c.Parent then c:PivotTo(CFrame.new(bp + Vector3.new(0, 0, 4))) end
-		task.wait(0.25)
+	local board, pp = findBoardForQuest(qid)
+	if not (board and pp) then
+		notify("Quest board not found: " .. qid)
+		return false
 	end
+	questBusy = true
+	local c = char()
+	if not c then questBusy = false return false end
+
+	local bp = pp.Parent:IsA("BasePart") and pp.Parent.Position or board:GetPivot().Position
+	for _ = 1, 3 do
+		if c and c.Parent then c:PivotTo(CFrame.new(bp + Vector3.new(0, 0, 4))) end
+		task.wait(0.2)
+	end
+
 	local h = hrp()
-	if not (h and (h.Position - bp).Magnitude <= 15) then
+	if not (h and (h.Position - bp).Magnitude <= 18) then
 		questBusy = false
 		return false
 	end
+
 	pcall(function() firePP(pp) end)
-	for _, d in pairs(workspace:GetDescendants()) do
-		if d:IsA("ProximityPrompt") and d.ActionText == "Interact" then
-			local p = d.Parent and (d.Parent:IsA("BasePart") and d.Parent.Position
-				or d.Parent:IsA("Model") and d.Parent:GetPivot().Position)
-			if p and (p - bp).Magnitude <= 40 then
-				pcall(function() firePP(d) end)
-			end
-		end
-	end
-	task.wait(0.9)
+	task.wait(0.5)
+
 	callSvc("QuestsService", "set_board_viewing", true)
 	task.wait(0.3)
-	local function hasChild()
-		local aq = activeQuests()
-		return aq and aq:FindFirstChild(qid) ~= nil
-	end
-	if lp:GetAttribute(qid) == true then
-		callSvc("QuestsService", "repeat_quest", qid)
-	else
-		callSvc("QuestsService", "get_quest", qid, "yes")
-	end
-	task.wait(0.9)
-	if not hasChild() then
-		if lp:GetAttribute(qid) == true then
+
+	local alreadyDone = lp:GetAttribute(qid) == true
+	local attempts = 0
+	local accepted = false
+
+	local function tryAccept()
+		if alreadyDone then
+			local ok1 = callSvc("QuestsService", "repeat_quest", qid)
+			task.wait(0.6)
+			if activeQuests() and activeQuests():FindFirstChild(qid) then return true end
 			callSvc("QuestsService", "get_quest", qid, "yes")
+			task.wait(0.6)
 		else
+			callSvc("QuestsService", "get_quest", qid, "yes")
+			task.wait(0.6)
+			if activeQuests() and activeQuests():FindFirstChild(qid) then return true end
 			callSvc("QuestsService", "repeat_quest", qid)
+			task.wait(0.6)
 		end
-		task.wait(0.9)
+		local aq = activeQuests()
+		return aq ~= nil and aq:FindFirstChild(qid) ~= nil
 	end
+
+	while not accepted and attempts < 3 do
+		attempts = attempts + 1
+		accepted = tryAccept()
+		if not accepted then task.wait(1) end
+	end
+
 	callSvc("QuestsService", "set_board_viewing", false)
-	local ok = hasChild()
 	questBusy = false
-	return ok
+
+	if accepted then
+		notify("Quest accepted: " .. qid)
+	end
+	return accepted
 end
+
+local questId, autoQuest = "KillForestBrawler", false
+local function questMob(qid)
+	if qid:sub(1, 4) == "Kill" then
+		return (qid:sub(5):gsub("(%u)", " %1"):gsub("^%s", ""))
+	end
+end
+
 task.spawn(function()
 	local nextTry = 0
 	while not dead do
 		if autoQuest then
 			local aq = activeQuests()
 			local q = aq and aq:FindFirstChild(questId)
+
 			if not q then
-				if tick() >= nextTry and not acceptQuest(questId) then
-					nextTry = tick() + 20 
+				if tick() >= nextTry then
+					if not acceptQuest(questId) then
+						nextTry = tick() + 15
+					end
 				end
 			else
 				local mob = questMob(questId)
-				if mob then farmTarget = mob farmOn = true auraOn = true end
-				local lastP = -1
-				local p = q:GetAttribute("stage_progress")
-				if p and p ~= lastP then lastP = p end
-				callSvc("QuestsService", "collect", questId) 
+				if mob then
+					farmTarget = mob
+					if C.farmTarget then C.farmTarget:Set(mob) end
+					farmOn = true
+					auraOn = true
+					if C.aura then C.aura:Set(true) end
+				end
+
+				local _, stage, progress = getQuestStage(questId)
+				local ok = callSvc("QuestsService", "collect", questId)
+				if ok then
+					notify("Quest collected: " .. questId .. " (stage " .. tostring(stage) .. ")")
+					task.wait(1)
+					local aq2 = activeQuests()
+					if not (aq2 and aq2:FindFirstChild(questId)) then
+						notify("Quest complete! Re-accepting...")
+						farmOn = false
+						nextTry = 0 
+					end
+				end
 			end
-			task.wait(3)
+			task.wait(2.5)
 		else
 			task.wait(0.8)
 		end
 	end
 end)
+
+-- ============================================================
+-- STORY QUESTS (StarterQuest, StarterWeapon, ActivateNen)
+-- ============================================================
+
+local function findNPC(name)
+	local world = workspace:FindFirstChild("World")
+	local root = world or workspace
+	for _, m in pairs(root:GetDescendants()) do
+		if m:IsA("Model") and m.Name == name then
+			local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
+			if pp then return m, pp end
+		end
+	end
+end
+
+local function getStoryQuestStage(qid)
+	local aq = activeQuests()
+	local q = aq and aq:FindFirstChild(qid)
+	if not q then return nil, 0 end
+	return q:GetAttribute("stage") or 1, q:GetAttribute("stage_progress") or 0
+end
+
+local function doStoryStage(qid)
+	local stage, progress = getStoryQuestStage(qid)
+	if not stage then
+		notify(qid .. " not active in current slot.")
+		return
+	end
+	notify("Processing " .. qid .. " (Stage " .. stage .. ")")
+	
+	if qid == "StarterQuest" then
+		if stage == 1 then
+			local m, pp = findNPC("Diana")
+			if m and pp then
+				moveTo(m:GetPivot())
+				task.wait(0.5)
+				pcall(function() firePP(pp) end)
+				task.wait(0.5)
+				callSvc("QuestsService", "get_quest", qid, "yes")
+				notify("Talked to Diana.")
+			else notify("Diana not found.") end
+		elseif stage == 2 then
+			-- Rescue April (Carry tool)
+			local ap = findNPC("April")
+			if ap then
+				moveTo(ap:GetPivot())
+				task.wait(0.5)
+				-- Check for carry tool in backpack
+				local tool = lp.Backpack:FindFirstChild("April") or lp.Backpack:FindFirstChildWhichIsA("Tool")
+				if tool and hum() then hum():EquipTool(tool) end
+				task.wait(0.5)
+				-- Walk back to Diana
+				local diana = findNPC("Diana")
+				if diana then
+					moveTo(diana:GetPivot())
+					task.wait(0.5)
+					callSvc("QuestsService", "get_quest", qid, "yes")
+					notify("Carried April back to Diana.")
+				end
+			else notify("April not found.") end
+		elseif stage == 3 then
+			local m, pp = findNPC("Diana")
+			if m and pp then
+				moveTo(m:GetPivot())
+				task.wait(0.5)
+				pcall(function() firePP(pp) end)
+				task.wait(0.5)
+				callSvc("QuestsService", "get_quest", qid, "yes")
+				notify("Completed StarterQuest.")
+			end
+		end
+	elseif qid == "StarterWeapon" then
+		if stage == 1 or stage == 2 or stage == 6 then
+			local m, pp = findNPC("Jager")
+			if m and pp then
+				moveTo(m:GetPivot())
+				task.wait(0.5)
+				pcall(function() firePP(pp) end)
+				task.wait(0.5)
+				callSvc("QuestsService", "get_quest", qid, "yes")
+				notify("Talked to Jager.")
+			end
+		elseif stage == 4 then
+			-- Find blacksmith / crafting station
+			local crafted = false
+			for _, m in pairs(workspace:GetDescendants()) do
+				if m:IsA("Model") and (m.Name:lower():find("smith") or m.Name:lower():find("craft")) then
+					local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
+					if pp then
+						moveTo(m:GetPivot())
+						task.wait(0.5)
+						pcall(function() firePP(pp) end)
+						task.wait(1)
+						notify("Interacted with crafting station.")
+						crafted = true
+						break
+					end
+				end
+			end
+			if not crafted then
+				notify("Could not find blacksmith.")
+			else
+				callSvc("QuestsService", "get_quest", qid, "yes")
+			end
+		elseif stage == 5 then
+			-- Equip weapon
+			local tool = lp.Backpack:FindFirstChildWhichIsA("Tool")
+			if tool and hum() then
+				hum():EquipTool(tool)
+				task.wait(1)
+				callSvc("QuestsService", "get_quest", qid, "yes")
+				notify("Equipped weapon.")
+			else
+				notify("No weapon in backpack to equip.")
+			end
+		end
+	elseif qid == "ActivateNen" then
+		local cave = workspace:FindFirstChild("World")
+		cave = cave and cave:FindFirstChild("Map")
+		cave = cave and cave:FindFirstChild("Map Locations")
+		cave = cave and cave:FindFirstChild("Nen Cave")
+		if cave then
+			moveTo(cave:GetPivot() + Vector3.new(0, 3, 0))
+			notify("At Nen Cave — interacting...")
+			task.wait(1)
+			-- Scan for NPC "Rohan" or prompt nearby
+			for _, m in pairs(workspace:GetDescendants()) do
+				if m:IsA("ProximityPrompt") and m.Parent and m.Parent:IsA("BasePart") then
+					if (m.Parent.Position - hrp().Position).Magnitude < 20 then
+						pcall(function() firePP(m) end)
+					end
+				end
+			end
+			callSvc("QuestsService", "get_quest", qid, "yes")
+		else
+			notify("Nen Cave location not found.")
+		end
+	end
+end
+
+-- ============================================================
+-- Rest of the original script (chests, farm, parry, etc.)
+-- ============================================================
 
 local chestOn = false
 task.spawn(function()
@@ -966,6 +1200,26 @@ task.delay(0.5, function()
 		else notify("No pending talent choice") end
 	end})
 
+	local sStory = tProg:Section("Story Quests")
+	sStory:Button({Text = "Auto-Do StarterQuest", Callback = function()
+		doStoryStage("StarterQuest")
+	end})
+	sStory:Button({Text = "Auto-Do StarterWeapon", Callback = function()
+		doStoryStage("StarterWeapon")
+	end})
+	sStory:Button({Text = "TP to Nen Cave", Callback = function()
+		local cave = workspace:FindFirstChild("World")
+		cave = cave and cave:FindFirstChild("Map")
+		cave = cave and cave:FindFirstChild("Map Locations")
+		cave = cave and cave:FindFirstChild("Nen Cave")
+		if cave then
+			moveTo(cave:GetPivot() + Vector3.new(0, 3, 0))
+			notify("At Nen Cave — interact with ActivateNen NPC")
+		else
+			notify("Nen Cave not found")
+		end
+	end})
+
 	local sCombat = tCombat:Section("Combat")
 	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
 	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
@@ -1013,7 +1267,18 @@ task.delay(0.5, function()
 	C.alert = s4:Toggle({Text="Player Alert", Default=false, Callback=function(v) alertOn=v end})
 
 	local s4b = tFarm:Section("Auto Quest")
-	C.quest = s4b:Dropdown({Text="Quest", Options={"KillForestBrawler","KillCaveBrawler"}, Default="KillForestBrawler", Callback=function(v) questId=v end})
+	-- Dynamically pull all quests from the board cache if available
+	local allQuests = {}
+	if next(boardCache) then
+		for _, data in pairs(boardCache) do
+			for _, q in pairs(data.quests) do table.insert(allQuests, q) end
+		end
+	else
+		allQuests = {"KillForestBrawler","KillCaveBrawler","KillMoleRat","KillFoxbearHunter","KillBlackBlick","KillStoneEye","KillSandyStorm","KillBeachKing","KillMasterOfTheSwamp","KillCrimsonFlame"}
+	end
+	table.sort(allQuests)
+	
+	C.quest = s4b:Dropdown({Text="Quest", Options=allQuests, Default=allQuests[1], Callback=function(v) questId=v end})
 	s4b:TextBox({Text="Custom Quest Id", Placeholder="e.g. KillMoleRat", Callback=function(v) if #v>0 then questId=v end end})
 	C.autoQuest = s4b:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
 
