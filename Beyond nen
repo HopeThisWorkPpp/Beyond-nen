@@ -1,0 +1,1092 @@
+-- Beyond Nen (Deobfuscated / Cleaned)
+local Players = game:GetService("Players")
+local RS = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local PathfindingService = game:GetService("PathfindingService")
+local VirtualUser = game:GetService("VirtualUser")
+local TeleportService = game:GetService("TeleportService")
+local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
+local lp = Players.LocalPlayer
+
+local ENV = (type(getgenv) == "function" and getgenv()) or _G
+ENV.BeyondNenHub = ENV.BeyondNenHub or nil
+if ENV.BeyondNenHub and ENV.BeyondNenHub.Destroy then pcall(ENV.BeyondNenHub.Destroy) end
+local function isFn(x) return type(x) == "function" end
+local function safeGetHui()
+	if isFn(gethui) then local ok, h = pcall(gethui) if ok and h then return h end end
+	return game:GetService("CoreGui")
+end
+for _, p in pairs({safeGetHui(), game:GetService("CoreGui"), lp:FindFirstChild("PlayerGui")}) do
+	if p then for _, g in pairs(p:GetChildren()) do
+		if g.Name == "BeyondNenHub" or g.Name == "BeyondNenHubHint" then pcall(function() g:Destroy() end) end
+	end end
+end
+
+local connections, injected = {}, {}
+local function bind(c) connections[#connections+1] = c return c end
+local function track(i) injected[#injected+1] = i return i end
+
+local queueTP = isFn(queueonteleport) and queueonteleport or (isFn(queue_on_teleport) and queue_on_teleport or nil)
+local clipSet = isFn(setclipboard) and setclipboard or (isFn(toclipboard) and toclipboard or (isFn(set_clipboard) and set_clipboard or nil))
+
+local firePP = fireproximityprompt
+if not isFn(firePP) then
+	firePP = function(p) 
+		if p and p:IsA("ProximityPrompt") then
+			p:InputHoldBegin()
+			task.wait((p.HoldDuration or 0) + 0.05)
+			p:InputHoldEnd()
+		end
+	end
+end
+
+local function httpGet(url)
+	for _, f in ipairs({
+		function() return game:HttpGet(url) end,
+		function() return httpget and httpget(url) end,
+		function() local r = request and request({Url = url, Method = "GET"}) return r and r.Body end,
+		function() local r = http_request and http_request({Url = url, Method = "GET"}) return r and r.Body end,
+	}) do
+		local ok, res = pcall(f)
+		if ok and type(res) == "string" and #res > 0 then return res end
+	end
+end
+
+local function isLibSource(s)
+	return type(s) == "string"
+		and s:find("MythiOs UI Library", 1, true)
+		and s:find("api:Toggle", 1, true)
+		and s:find("return Library", 1, true)
+		and not s:find("premium", 1, true)
+		and not s:find("freemium", 1, true)
+		and not s:find("loadstring", 1, true)
+end
+local lib
+do
+	local src
+	local done, res = false, nil
+	task.spawn(function()
+		res = httpGet("https://mythios.online/v/rivalsuilib")
+		done = true
+	end)
+	local t0 = os.clock()
+	while not done and os.clock() - t0 < 10 do task.wait(0.1) end
+	if isLibSource(res) then
+		src = res
+		if isFn(writefile) then pcall(writefile, "QA Scripts/mythios_lib.lua", res) end
+	elseif isFn(isfile) and isFn(readfile) and isfile("QA Scripts/mythios_lib.lua") then
+		local cached = readfile("QA Scripts/mythios_lib.lua")
+		if isLibSource(cached) then src = cached end
+	end
+	if src then
+		local fn = loadstring(src, "@mythios")
+		if isFn(fn) then
+			local ok2, l = pcall(fn)
+			if ok2 and type(l) == "table" and isFn(l.CreateWindow) then lib = l end
+		end
+	end
+end
+if not lib then
+	error("[BeyondNenHub] UI library failed to load (mythios.online unreachable or served non-lib content)")
+end
+local window = lib:CreateWindow({
+	Title = "Mythios Hub", Subtitle = "Beyond Nen",
+	ToggleKey = Enum.KeyCode.RightShift, Name = "BeyondNenHub",
+})
+
+local function notify(msg) pcall(function() window:Notify(msg) end) end
+
+local function char() return lp.Character end
+local function hrp()
+	local c = char(); return c and c:FindFirstChild("HumanoidRootPart")
+end
+local function hum()
+	local c = char(); return c and c:FindFirstChildOfClass("Humanoid")
+end
+local function attr(n) return lp:GetAttribute(n) end
+local function svc(name, m) 
+	return RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services[name].RF[m]
+end
+local function rem(name) return RS.Remotes[name] end
+
+local CN = RS:FindFirstChild("CombatNet")
+local cn = { rid = 0, combo = 1, lastDecision = 0 }
+local function nextRid() cn.rid = cn.rid + 1 return cn.rid end
+local bindCNLate 
+local function bindDecision(f)
+	bind(f.Decision.OnClientEvent:Connect(function(rid, ok, reason, expected)
+		if not ok then
+			if reason == "ComboMismatch" and type(expected) == "number" then
+				cn.combo = expected
+			else
+				cn.combo = 1 
+			end
+			cn.lastDecision = os.clock()
+		else
+			cn.combo = (cn.combo % 5) + 1
+		end
+	end))
+end
+if CN then bindDecision(CN) end
+bind(RS.ChildAdded:Connect(function(c)
+	if c.Name == "CombatNet" and not CN then
+		CN = c
+		bindDecision(c)
+		if bindCNLate then bindCNLate(c) end
+	end
+end))
+local function swingAt(mob)
+	if not CN then return false end
+	if not (mob and mob.Parent and (mob:GetAttribute("Health") or 0) > 0) then return false end
+	local c = char(); if not c then return false end
+	if not c:FindFirstChildOfClass("Tool") then
+		local t = lp.Backpack:FindFirstChildOfClass("Tool")
+		local h = c:FindFirstChildOfClass("Humanoid")
+		if t and h then h:EquipTool(t) end
+	end
+	local r = nextRid()
+	CN.Attack:FireServer(r, "M1", cn.combo)
+	task.wait(0.08)
+	if mob.Parent then CN.HitClaim:FireServer(r, mob) end
+	return true
+end
+
+local function tryGameRequire(mod)
+	if not mod then return nil end
+	if typeof(getrenv) == "function" then
+		local ok, env = pcall(getrenv)
+		if ok and type(env) == "table" and type(env.require) == "function" then
+			local ok2, res = pcall(env.require, mod)
+			if ok2 and res ~= nil then return res end
+		end
+	end
+	local ok3, res3 = pcall(require, mod)
+	return (ok3 and res3 ~= nil) and res3 or nil
+end
+local Knit
+local function knitSvc(name)
+	if not Knit then
+		local pkg = RS.Packages:FindFirstChild("Knit") or RS.Packages:FindFirstChild("knit")
+		if pkg then Knit = tryGameRequire(pkg) end
+	end
+	if not Knit then return nil end
+	local ok, s = pcall(function() return Knit.GetService(name) end)
+	return ok and s or nil
+end
+local function callSvc(name, m, ...)
+	local args = {...}
+	local s = knitSvc(name)
+	if s and s[m] then
+		return pcall(function() return s[m](s, table.unpack(args)) end)
+	end
+	return pcall(function() return svc(name, m):InvokeServer(table.unpack(args)) end)
+end
+
+local moveOK = {tier = nil}
+local function moveTo(targetCF, speed)
+	local h = hrp(); if not h then return false end
+	speed = speed or 60
+	local ok = pcall(function() char():PivotTo(targetCF) end)
+	task.wait(0.15)
+	if ok and hrp() and (hrp().Position - targetCF.Position).Magnitude < 8 then
+		moveOK.tier = 1 return true
+	end
+	local h2 = hrp(); if not h2 then return false end
+	local dist = (h2.Position - targetCF.Position).Magnitude
+	local tw = TweenService:Create(h2, TweenInfo.new(math.max(dist/speed, 0.5), Enum.EasingStyle.Linear), {CFrame = targetCF})
+	tw:Play()
+	local done = false
+	bind(tw.Completed:Connect(function() done = true end))
+	local t0 = tick()
+	while not done and tick()-t0 < dist/speed + 3 do task.wait(0.1) end
+	if hrp() and (hrp().Position - targetCF.Position).Magnitude < 10 then
+		moveOK.tier = 2 return true
+	end
+	pcall(function() tw:Cancel() end)
+	local hu = hum(); if not hu then return false end
+	local path = PathfindingService:CreatePath({AgentRadius=2, AgentHeight=5, AgentCanJump=true})
+	local pok = pcall(function() path:ComputeAsync(h2.Position, targetCF.Position) end)
+	if pok and path.Status == Enum.PathStatus.Success then
+		for _, wp in pairs(path:GetWaypoints()) do
+			if wp.Action == Enum.PathWaypointAction.Jump then hu.Jump = true end
+			hu:MoveTo(wp.Position); hu.MoveToFinished:Wait(2)
+		end
+	else
+		hu:MoveTo(targetCF.Position); hu.MoveToFinished:Wait(8)
+	end
+	moveOK.tier = 3
+	return hrp() and (hrp().Position - targetCF.Position).Magnitude < 12
+end
+
+local afkConn
+local function setAntiAFK(on)
+	if on and not afkConn then
+		afkConn = bind(lp.Idled:Connect(function()
+			VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new())
+		end))
+	elseif not on and afkConn then afkConn:Disconnect() afkConn = nil end
+end
+
+local noclipOn, flyOn, infJumpOn, clickTPOn = false, false, false, false
+local flySpeed, wsOn, wsVal = 60, false, 16
+
+bind(RunService.Stepped:Connect(function()
+	local farmNoclip = farmOn and farmFloat
+	if (noclipOn or farmNoclip) and char() then
+		for _, p in pairs(char():GetDescendants()) do
+			if p:IsA("BasePart") then p.CanCollide = false end
+		end
+	end
+end))
+bind(RunService.Heartbeat:Connect(function()
+	if flyOn and char() then
+		local h, hu = hrp(), hum()
+		if not (h and hu) then return end
+		local v = hu.MoveDirection * flySpeed
+		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then v = v + Vector3.new(0, flySpeed, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then v = v - Vector3.new(0, flySpeed, 0) end
+		h.AssemblyLinearVelocity = v
+		h.AssemblyAngularVelocity = Vector3.zero
+	end
+end))
+bind(UserInputService.JumpRequest:Connect(function()
+	if infJumpOn and hum() then hum():ChangeState(Enum.HumanoidStateType.Jumping) end
+end))
+local mouse = lp:GetMouse()
+bind(mouse.Button1Down:Connect(function()
+	if clickTPOn and char() and mouse.Hit then
+		char():PivotTo(mouse.Hit + Vector3.new(0, 3, 0))
+	end
+end))
+bind(RunService.Heartbeat:Connect(function()
+	if wsOn and hum() and hum().WalkSpeed ~= wsVal then hum().WalkSpeed = wsVal end
+end))
+
+local C = {} 
+local farmOn, farmTarget, auraOn, dead = false, "Forest Brawler", false, false
+local farmPos, farmDist, farmFloat = "Above", 8, true
+local farmYOff = 0 
+local farmMob = nil 
+local questBusy = false 
+local function farmCF(mob)
+	local mp = mob:GetPivot()
+	if farmPos == "Behind" then
+		return mp * CFrame.new(0, farmYOff, farmDist)
+	elseif farmPos == "Below" then
+		return mp * CFrame.new(0, -math.max(farmDist, 3) + farmYOff, 0) * CFrame.Angles(math.rad(90), 0, 0)
+	end
+	return mp * CFrame.new(0, math.max(farmDist, 3) + farmYOff, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+end
+local AURA_RANGE = 12
+
+local function landToGround()
+	local h = hrp(); if not h then farmMob = nil return end
+	local rc = workspace:Raycast(h.Position, Vector3.new(0, -600, 0))
+	if rc and rc.Position.Y > h.Position.Y - 400 then
+		char():PivotTo(CFrame.new(rc.Position + Vector3.new(0, 3, 0)))
+	end
+	farmMob = nil
+end
+
+bind(RunService.Heartbeat:Connect(function()
+	if farmFloat and farmOn and farmMob and farmMob.Parent and char() and not questBusy then
+		local h = hrp()
+		if h then
+			local cf = farmCF(farmMob)
+			if cf.Position.Y < workspace.FallenPartsDestroyHeight + 20 then
+				cf = farmMob:GetPivot() * CFrame.new(0, math.max(farmDist, 3), 0) * CFrame.Angles(math.rad(-90), 0, 0)
+			end
+			h.CFrame = cf
+			h.AssemblyLinearVelocity = Vector3.zero
+		end
+	end
+end))
+
+task.spawn(function()
+	while not dead do
+		if auraOn and char() then 
+			local p = hrp() and hrp().Position
+			if p then
+				for _, m in pairs(workspace:GetChildren()) do
+					if m:IsA("Model") and (m:GetAttribute("Health") or 0) > 0
+						and m:FindFirstChildOfClass("Humanoid")
+						and not Players:GetPlayerFromCharacter(m)
+						and (m:GetPivot().Position - p).Magnitude <= AURA_RANGE then
+						swingAt(m)
+					end
+				end
+			end
+			task.wait(0.45)
+		else
+			task.wait(0.4)
+		end
+	end
+end)
+local questId, autoQuest = "KillForestBrawler", false
+local function questMob(qid)
+	if qid:sub(1, 4) == "Kill" then
+		return (qid:sub(5):gsub("(%u)", " %1"):gsub("^%s", ""))
+	end
+end
+local function activeQuests()
+	local d = lp:FindFirstChild("Data")
+	local ss = d and d:FindFirstChild("SavesSlot")
+	local slot = ss and ss:FindFirstChild(tostring(lp:GetAttribute("SelectedSlot") or 1))
+	local pd = slot and slot:FindFirstChild("PlayerData")
+	return pd and pd:FindFirstChild("ActiveQuests")
+end
+local function findBoard(qid)
+	local world = workspace:FindFirstChild("World")
+	local root = (world and world:FindFirstChild("Quest Boards")) or workspace
+	for _, d in pairs(root:GetDescendants()) do
+		if d:GetAttribute("Quest") == qid then
+			local b = d:FindFirstAncestorOfClass("Model")
+			local pp = b and (b:FindFirstChild("Interactor", true) or b):FindFirstChildWhichIsA("ProximityPrompt", true)
+			if b and pp then return b, pp end
+		end
+	end
+end
+local function acceptQuest(qid)
+	local board, pp = findBoard(qid)
+	if not (board and pp) then return false end
+	questBusy = true 
+	local c = char()
+	local bp = pp.Parent:IsA("BasePart") and pp.Parent.Position or board:GetPivot().Position
+	for i = 1, 4 do
+		if c and c.Parent then c:PivotTo(CFrame.new(bp + Vector3.new(0, 0, 4))) end
+		task.wait(0.25)
+	end
+	local h = hrp()
+	if not (h and (h.Position - bp).Magnitude <= 15) then
+		questBusy = false
+		return false
+	end
+	pcall(function() firePP(pp) end)
+	for _, d in pairs(workspace:GetDescendants()) do
+		if d:IsA("ProximityPrompt") and d.ActionText == "Interact" then
+			local p = d.Parent and (d.Parent:IsA("BasePart") and d.Parent.Position
+				or d.Parent:IsA("Model") and d.Parent:GetPivot().Position)
+			if p and (p - bp).Magnitude <= 40 then
+				pcall(function() firePP(d) end)
+			end
+		end
+	end
+	task.wait(0.9)
+	callSvc("QuestsService", "set_board_viewing", true)
+	task.wait(0.3)
+	local function hasChild()
+		local aq = activeQuests()
+		return aq and aq:FindFirstChild(qid) ~= nil
+	end
+	if lp:GetAttribute(qid) == true then
+		callSvc("QuestsService", "repeat_quest", qid)
+	else
+		callSvc("QuestsService", "get_quest", qid, "yes")
+	end
+	task.wait(0.9)
+	if not hasChild() then
+		if lp:GetAttribute(qid) == true then
+			callSvc("QuestsService", "get_quest", qid, "yes")
+		else
+			callSvc("QuestsService", "repeat_quest", qid)
+		end
+		task.wait(0.9)
+	end
+	callSvc("QuestsService", "set_board_viewing", false)
+	local ok = hasChild()
+	questBusy = false
+	return ok
+end
+task.spawn(function()
+	local nextTry = 0
+	while not dead do
+		if autoQuest then
+			local aq = activeQuests()
+			local q = aq and aq:FindFirstChild(questId)
+			if not q then
+				if tick() >= nextTry and not acceptQuest(questId) then
+					nextTry = tick() + 20 
+				end
+			else
+				local mob = questMob(questId)
+				if mob then farmTarget = mob farmOn = true auraOn = true end
+				local lastP = -1
+				local p = q:GetAttribute("stage_progress")
+				if p and p ~= lastP then lastP = p end
+				callSvc("QuestsService", "collect", questId) 
+			end
+			task.wait(3)
+		else
+			task.wait(0.8)
+		end
+	end
+end)
+
+local chestOn = false
+task.spawn(function()
+	while not dead do
+		if chestOn and char() then
+			local found = false
+			for _, d in pairs(workspace:GetDescendants()) do
+				if d:IsA("ProximityPrompt") then
+					local m = d:FindFirstAncestorOfClass("Model")
+					if m and m.Name:lower():find("chest") then
+						found = true
+						char():PivotTo(m:GetPivot() + Vector3.new(0, 0, 3))
+						task.wait(0.35)
+						firePP(d)
+						task.wait(0.5)
+					end
+				end
+			end
+			if not found then task.wait(2) end
+		else
+			task.wait(1)
+		end
+	end
+end)
+
+task.spawn(function()
+	local wasFarm = false
+	while not dead do
+		if farmOn and char() then
+			wasFarm = true
+			local best, bd = nil, math.huge
+			local p = hrp() and hrp().Position or Vector3.new()
+			for _, m in pairs(workspace:GetChildren()) do
+				if m:IsA("Model") and m.Name == farmTarget and (m:GetAttribute("Health") or 0) > 0 then
+					local d = (m:GetPivot().Position - p).Magnitude
+					if d < bd then bd, best = d, m end
+				end
+			end
+			if best then
+				farmMob = best
+				while farmOn and best.Parent and (best:GetAttribute("Health") or 0) > 0 and char() do
+					swingAt(best)
+					task.wait(0.42) 
+				end
+				farmMob = nil
+			else
+				farmMob = nil
+				task.wait(0.6)
+			end
+		else
+			if wasFarm then 
+				wasFarm = false
+				landToGround()
+			end
+			task.wait(0.5)
+		end
+	end
+end)
+
+local parryOn, lastParry, parryRange, parryDelay = false, 0, 16, 0.32
+local function doParry()
+	if not CN then return end
+	if tick() - lastParry < 1.8 then return end 
+	lastParry = tick()
+	CN.Defend:FireServer("BlockStart", false, os.clock(), nextRid())
+	task.delay(0.4, function() pcall(function() CN.Defend:FireServer("BlockEnd") end) end)
+end
+local function nearUs(m)
+	local h = hrp()
+	if not (m and m.Parent and h) then return false end
+	local ok2, mp = pcall(function() return (m:IsA("Model") and m:GetPivot() or m.CFrame).Position end)
+	return ok2 and (mp - h.Position).Magnitude <= parryRange
+end
+local watched = {} 
+task.spawn(function()
+	while not dead do
+		if parryOn and char() then
+			local seen = {}
+			for _, m in pairs(workspace:GetDescendants()) do
+				if m:IsA("Model") and m:GetAttribute("NpcSwingEndsAt") ~= nil
+					and (m:GetAttribute("Health") or 0) > 0 and nearUs(m) then
+					seen[m] = true
+					if not watched[m] then
+						watched[m] = m:GetAttributeChangedSignal("NpcSwingEndsAt"):Connect(function()
+							if parryOn and nearUs(m) then
+								task.delay(parryDelay, function() if parryOn and nearUs(m) then doParry() end end)
+							end
+						end)
+					end
+				end
+			end
+			for m, c in pairs(watched) do
+				if not seen[m] or not m.Parent then watched[m] = nil pcall(function() c:Disconnect() end) end
+			end
+			task.wait(0.5)
+		else
+			task.wait(1)
+		end
+	end
+end)
+function bindCNLate(f) 
+	bind(f.Swing.OnClientEvent:Connect(function(attacker) 
+		if not parryOn then return end
+		local m = typeof(attacker) == "Instance" and attacker
+			or type(attacker) == "string" and workspace:FindFirstChild(attacker)
+		if not m or m == char() or attacker == lp.Name then return end
+		if nearUs(m) then doParry() end
+	end))
+end
+if CN then bindCNLate(CN) end
+
+local skillOn = false
+local function playerData()
+	local d = lp:FindFirstChild("Data")
+	local ss = d and d:FindFirstChild("SavesSlot")
+	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
+	return slot and slot:FindFirstChild("PlayerData")
+end
+local function equippedSkills()
+	local out, seen = {}, {}
+	local function add(n) if n and n ~= "" and not n:find("Empty") and not seen[n] then seen[n] = true out[#out+1] = n end end
+	local sk = playerData() and playerData():FindFirstChild("Skills")
+	if not sk then return out end
+	local un = sk:FindFirstChild("UnlockedSkills")
+	if un then
+		for _, x in pairs(un:GetChildren()) do add(x.Name) end
+		for n, v in pairs(un:GetAttributes()) do if v == true then add(n) end end
+	end
+	local eq = sk:FindFirstChild("EquippedNenSkills")
+	if eq then
+		for _, x in pairs(eq:GetChildren()) do add(x.Name) end
+		for _, v in pairs(eq:GetAttributes()) do if type(v) == "string" then add(v) end end
+	end
+	return out
+end
+task.spawn(function()
+	while not dead do
+		if skillOn and char() then
+			for _, s in pairs(equippedSkills()) do
+				callSvc("SkillsService", "UseSkill", s)
+				task.wait(0.7)
+			end
+			task.wait(3)
+		else
+			task.wait(1)
+		end
+	end
+end)
+
+local gripOn = false
+task.spawn(function()
+	while not dead do
+		if gripOn and farmMob and farmMob.Parent then
+			local hp = farmMob:GetAttribute("Health") or 0
+			if hp > 0 and hp <= 25 then
+				pcall(function() rem("Grip"):FireServer(farmMob) end)
+				task.wait(1.5)
+			end
+		end
+		task.wait(0.4)
+	end
+end)
+
+local Items = tryGameRequire(RS.Shared:FindFirstChild("Data") and RS.Shared.Data:FindFirstChild("InventoryItems"))
+local RARITY_ORDER2 = {Common=1, Uncommon=2, Rare=3, Special=4, Legendary=5, Mythical=6, Extraordinary=7}
+local function invFolder()
+	local d = lp:FindFirstChild("Data")
+	local ss = d and d:FindFirstChild("SavesSlot")
+	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
+	local pd = slot and slot:FindFirstChild("PlayerData")
+	return pd and pd:FindFirstChild("Inventory")
+end
+local function weapons()
+	local out = {}
+	local inv = invFolder()
+	if not (inv and Items and Items.ItemList) then return out end
+	for _, x in pairs(inv:GetChildren()) do
+		local def = Items.ItemList[x:GetAttribute("item_id")]
+		local data = def and def.Data
+		local dmg = data and data.ComboData and data.ComboData[1] and data.ComboData[1].Damage
+		if data and data.DamageStat then
+			table.insert(out, {
+				uuid = x:GetAttribute("uuid") or x.Name,
+				name = def.ItemName or x:GetAttribute("item_name") or x.Name,
+				dmg = tonumber(dmg) or 0, rarity = def.Rarity or "Common",
+			})
+		end
+	end
+	table.sort(out, function(a, b)
+		if a.dmg ~= b.dmg then return a.dmg > b.dmg end
+		return (RARITY_ORDER2[a.rarity] or 0) > (RARITY_ORDER2[b.rarity] or 0)
+	end)
+	return out
+end
+local autoWeapon, weaponChoice = false, nil
+local function equipWeapon(uuid)
+	callSvc("InventoryService", "put_in_hotbar", uuid, 1)
+	task.wait(0.4)
+	callSvc("InventoryService", "equip", uuid)
+	task.wait(0.5)
+	local c = char()
+	if c and not c:FindFirstChildOfClass("Tool") then
+		local h = c:FindFirstChildOfClass("Humanoid")
+		local t = lp.Backpack:FindFirstChildOfClass("Tool")
+		if h and t then h:EquipTool(t) end
+	end
+	return char() and char():FindFirstChildOfClass("Tool") ~= nil
+end
+task.spawn(function() 
+	while not dead do
+		if autoWeapon and char() and not char():FindFirstChildOfClass("Tool") then
+			local w = weapons()
+			local pick = w[1]
+			if weaponChoice then
+				for _, x in pairs(w) do if x.name == weaponChoice then pick = x break end end
+			end
+			if pick then equipWeapon(pick.uuid) end
+		end
+		task.wait(1.5)
+	end
+end)
+
+local Talents = tryGameRequire(RS.Shared:FindFirstChild("Data") and RS.Shared.Data:FindFirstChild("Talents"))
+local RARITY_ORDER = {Common=1, Uncommon=2, Rare=3, Special=4, Legendary=5, Mythical=6, Extraordinary=7}
+local function rarityOf(id)
+	local t = Talents and Talents.List and Talents.List[id]
+	return t and t.Rarity or "Common"
+end
+local talentOn, talentReroll, talentMin = false, false, "Rare"
+local function pendingChoice()
+	local ok, c = pcall(function() return svc("TalentService", "GetChoice"):InvokeServer() end)
+	if ok and type(c) == "table" and type(c.Hand) == "table" then return c end
+end
+local function bestCard(hand)
+	local best, br = nil, -1
+	for _, id in pairs(hand) do
+		local r = RARITY_ORDER[rarityOf(id)] or 0
+		if r > br then br, best = r, id end
+	end
+	return best, br
+end
+task.spawn(function()
+	while not dead do
+		if talentOn then
+			local c = pendingChoice()
+			if c then
+				local best, br = bestCard(c.Hand)
+				local want = RARITY_ORDER[talentMin] or 3
+				if talentReroll and br < want and (attr("Jenni") or 0) >= 10000 then
+					callSvc("TalentService", "RerollHand")
+					task.wait(1)
+				elseif best then
+					notify("Picking " .. best)
+					callSvc("TalentService", "Choose", best)
+				end
+			end
+			task.wait(2.5)
+		else
+			task.wait(1)
+		end
+	end
+end)
+
+local alertOn, lastAlert = false, 0
+task.spawn(function()
+	while not dead do
+		if alertOn and hrp() and tick() - lastAlert > 8 then
+			local p = hrp().Position
+			for _, pl in pairs(Players:GetPlayers()) do
+				local c = pl ~= lp and pl.Character
+				if c then
+					local d = (c:GetPivot().Position - p).Magnitude
+					if d < 60 then
+						lastAlert = tick()
+						notify("Player nearby: " .. pl.Name)
+						break
+					end
+				end
+			end
+			task.wait(2)
+		else
+			task.wait(2)
+		end
+	end
+end)
+
+local fbOn, fbOld = false, nil
+local function setFB(v)
+	local L = Lighting
+	if v then
+		fbOld = {ClockTime=L.ClockTime, GlobalShadows=L.GlobalShadows, FogEnd=L.FogEnd, Brightness=L.Brightness}
+		L.ClockTime, L.GlobalShadows, L.FogEnd, L.Brightness = 14, false, 1e6, 3
+	elseif fbOld then
+		L.ClockTime, L.GlobalShadows, L.FogEnd, L.Brightness = fbOld.ClockTime, fbOld.GlobalShadows, fbOld.FogEnd, fbOld.Brightness
+	end
+end
+
+local mineOn = false
+local function oreNodes()
+	local out = {}
+	local world = workspace:FindFirstChild("World")
+	local map = world and world:FindFirstChild("Map")
+	for _, m in pairs((map or workspace):GetDescendants()) do
+		if m:IsA("Model") then
+			local n = m.Name:lower()
+			if (n:match("ore") or n:match("rock") or n:match("node")) and not n:find("showcase") and not n:find("character") then
+				out[#out+1] = m
+			end
+		end
+	end
+	return out
+end
+task.spawn(function()
+	while not dead do
+		if mineOn and char() then
+			local nodes = oreNodes()
+			for _, n in pairs(nodes) do
+				if not mineOn or not char() then break end
+				if n.Parent then
+					char():PivotTo(n:GetPivot() + Vector3.new(0, 0, 3))
+					task.wait(0.6)
+					for i = 1, 4 do callSvc("MaterialService", "Mine") task.wait(0.5) end
+				end
+			end
+			task.wait(2)
+		else
+			task.wait(1.5)
+		end
+	end
+end)
+
+local fishOn, fishSession = false, nil
+pcall(function()
+	bind(svc("FishingService", "Cast").Parent.Parent.RE.Bite.OnClientEvent:Connect(function(id)
+		fishSession = id or fishSession
+	end))
+end)
+task.spawn(function()
+	while not dead do
+		if fishOn and char() and hrp() then
+			local ok, a, b, sid = pcall(function()
+				return svc("FishingService", "Cast"):InvokeServer(hrp().Position + hrp().CFrame.LookVector * 8)
+			end)
+			if ok then fishSession = sid or b or a end
+			local t0 = tick()
+			while fishOn and tick() - t0 < 8 do task.wait(0.3) end 
+			if fishSession then
+				pcall(function() svc("FishingService", "Reel"):InvokeServer(fishSession) end)
+				fishSession = nil
+			end
+			task.wait(1)
+		else
+			task.wait(1.5)
+		end
+	end
+end)
+
+local medOn = false
+pcall(function()
+	bind(svc("MeditationService", "StartMeditation").Parent.Parent.RE.KeyPrompt.OnClientEvent:Connect(function(id)
+		callSvc("MeditationService", "KeyPromptResult", id, true)
+	end))
+end)
+task.spawn(function()
+	while not dead do
+		if medOn and char() and hrp() then
+			local mp = workspace:FindFirstChild("MeditationParts")
+			local spot = mp and mp:FindFirstChildWhichIsA("BasePart", true)
+			if spot then
+				char():PivotTo(spot.CFrame + Vector3.new(0, 2, 0))
+				task.wait(0.5)
+				callSvc("MeditationService", "PlaceCarpet", spot.Position)
+				task.wait(0.5)
+				callSvc("MeditationService", "StartMeditation")
+				local t0 = tick()
+				while medOn and tick() - t0 < 25 do task.wait(1) end
+				callSvc("MeditationService", "StopMeditation")
+				callSvc("MeditationService", "UnplaceCarpet")
+			else
+				task.wait(3)
+			end
+		else
+			task.wait(1.5)
+		end
+	end
+end)
+
+pcall(function()
+	bind(svc("InventoryService", "equip").Parent.Parent.RE.ItemAdded.OnClientEvent:Connect(function(...)
+		local a = {...}
+		local parts = {}
+		for _, v in pairs(a) do parts[#parts+1] = tostring(type(v) == "table" and (v.item_name or v.Name or v) or v) end
+		notify("Loot: " .. table.concat(parts, ", "))
+	end))
+end)
+
+local CFG = "BeyondNenHub.json"
+local function saveConfig()
+	local data = {
+		farmOn=farmOn, farmTarget=farmTarget, farmPos=farmPos, farmDist=farmDist, farmYOff=farmYOff, farmFloat=farmFloat,
+		auraOn=auraOn, parryOn=parryOn, parryRange=parryRange, parryDelay=parryDelay,
+		skillOn=skillOn, gripOn=gripOn, autoWeapon=autoWeapon, weaponChoice=weaponChoice,
+		autoQuest=autoQuest, questId=questId, chestOn=chestOn, alertOn=alertOn,
+		wsOn=wsOn, wsVal=wsVal, talentOn=talentOn, talentReroll=talentReroll, talentMin=talentMin,
+		espOn=espOn, mineOn=mineOn, fishOn=fishOn, medOn=medOn, antiAFK=(afkConn ~= nil),
+	}
+	local ok, j = pcall(function() return HttpService:JSONEncode(data) end)
+	if ok and isFn(writefile) then writefile(CFG, j) end
+end
+local CFG_MAP = {
+	farmOn="farm", farmTarget="farmTarget", farmPos="farmPos", farmDist="farmDist",
+	farmYOff="farmYOff", farmFloat="farmFloat", auraOn="aura", parryOn="parry",
+	parryRange="parryRange", skillOn="skills", gripOn="grip", autoWeapon="autoWeapon",
+	autoQuest="autoQuest", chestOn="chests", alertOn="alert", wsOn="ws", wsVal="wsVal",
+	talentOn="talentAuto", talentReroll="talentReroll", talentMin="talentMin",
+	mineOn="mine", fishOn="fish", medOn="meditate", antiAFK="antiAFK",
+}
+local function loadConfig()
+	if not (isFn(isfile) and isfile(CFG)) then return end
+	local ok, d = pcall(function() return isFn(readfile) and HttpService:JSONDecode(readfile(CFG)) end)
+	if not (ok and type(d) == "table") then return end
+	task.delay(0.8, function() 
+		for k, v in pairs(d) do
+			if k == "espOn" and type(v) == "table" then
+				for n, on in pairs(v) do
+					local c = C["esp_" .. n]
+					if c then c:Set(on) else espOn[n] = on end
+				end
+			elseif k == "parryDelay" then
+				parryDelay = v
+				if C.parryDelay then C.parryDelay:Set(v * 100) end
+			elseif k == "questId" then
+				questId = v
+				if C.quest and (v == "KillForestBrawler" or v == "KillCaveBrawler") then C.quest:Set(v) end
+			elseif k == "weaponChoice" then
+				weaponChoice = v
+				if C.weapon and C.weaponByName then
+					for lbl, w in pairs(C.weaponByName) do if w.name == v then C.weapon:Set(lbl) break end end
+				end
+			else
+				local ck = CFG_MAP[k]
+				if ck and C[ck] then C[ck]:Set(v) end
+			end
+		end
+		notify("Config loaded")
+	end)
+end
+task.delay(1, loadConfig)
+if queueTP then
+	pcall(function() queueTP('local s; if type(isfile)=="function" then for _,p in pairs({"QA Scripts/BeyondNenHub.lua","BeyondNenHub.lua"}) do if isfile(p) then s=readfile(p) break end end end; if s then loadstring(s)() end') end)
+end
+
+local espOn = {players=false, mobs=false, chests=false, bosses=false}
+local espObjs = {}
+local function clearESP()
+	for _,o in pairs(espObjs) do pcall(function() o:Destroy() end) end
+	espObjs = {}
+end
+local function tagESP(inst, text, color)
+	if not inst or not inst:IsA("PVInstance") then return end
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "BNH_ESP"; bb.AlwaysOnTop = true; bb.Size = UDim2.fromOffset(120,40); bb.StudsOffset = Vector3.new(0,3,0)
+	bb.Adornee = inst; bb.Parent = inst
+	local t = Instance.new("TextLabel"); t.BackgroundTransparency = 1; t.Size = UDim2.fromScale(1,1)
+	t.Text = text; t.TextColor3 = color; t.TextStrokeTransparency = 0.5; t.Font = Enum.Font.GothamBold; t.TextSize = 12; t.Parent = bb
+	local hl = Instance.new("Highlight"); hl.Name = "BNH_ESP"; hl.FillColor = color; hl.FillTransparency = 0.85; hl.OutlineColor = color; hl.Parent = inst
+	track(bb); track(hl); espObjs[#espObjs+1] = bb; espObjs[#espObjs+1] = hl
+end
+local mobNames = {"Forest Brawler","Cave Brawler","Foxbear Hunter","Mole Rat","Black Blick","Stone Eye","Sandy Storm","Crimson Flame","Fox Bear"}
+local bossNames = {"Master of the Swamp","Beach King"}
+local function refreshESP()
+	clearESP()
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= lp and p.Character and espOn.players then
+			tagESP(p.Character, p.Name, Color3.fromRGB(255,80,80))
+		end
+	end
+	for _, m in pairs(workspace:GetChildren()) do
+		if m:IsA("Model") then
+			if espOn.mobs and table.find(mobNames, m.Name) then tagESP(m, m.Name, Color3.fromRGB(255,180,60)) end
+			if espOn.mobs and table.find(bossNames, m.Name) then tagESP(m, "[BOSS] "..m.Name, Color3.fromRGB(200,60,255)) end
+		end
+	end
+	if espOn.chests then
+		local cs = workspace:FindFirstChild("ChestSpawns")
+		if cs then for _, c in pairs(cs:GetDescendants()) do
+			if c:IsA("BasePart") or c:IsA("Model") then tagESP(c, "Chest", Color3.fromRGB(255,230,80)) end
+		end end
+	end
+	if espOn.bosses then
+		local bt = workspace:FindFirstChild("BossRespawnTimers")
+		if bt then for _, b in pairs(bt:GetChildren()) do
+			local v = b:IsA("ValueBase") and b.Value or b:GetAttribute("TimeLeft") or b:GetAttribute("Time")
+			local anchor = (b:IsA("PVInstance") and b) or b:FindFirstChildWhichIsA("BasePart", true)
+				or workspace:FindFirstChild(b.Name, true)
+			if anchor and anchor:IsA("PVInstance") then
+				tagESP(anchor, "[BOSS] " .. b.Name .. (v and (" " .. tostring(v) .. "s") or ""), Color3.fromRGB(255,60,120))
+			end
+		end end
+	end
+end
+task.spawn(function() 
+	while not dead do
+		if espOn.players or espOn.mobs or espOn.chests or espOn.bosses then refreshESP() end
+		task.wait(4)
+	end
+end)
+
+task.delay(0.5, function()
+	local tProg = window:AddTab("Progression")
+	local tCombat = window:AddTab("Combat")
+	local tFarm = window:AddTab("Farm")
+	local tMove = window:AddTab("Movement")
+	local tVis = window:AddTab("Visuals")
+	local tCred = window:AddTab("Credits")
+
+
+	local s3 = tProg:Section("Utility")
+	C.meditate = s3:Toggle({Text="Auto Meditate", Description="Sits at the nearest meditation spot and auto-answers prompts. Needs a carpet item.", Default=false, Callback=function(v) medOn=v end})
+	s3:Button({Text="AFK Chamber", Callback=function()
+		local ok,res = callSvc("AfkTransferService","RequestAfkTransfer")
+		notify("AFK transfer: " .. tostring(res or ok))
+	end})
+	s3:Button({Text="Respawn", Callback=function() callSvc("DeathService","Respawn") end})
+
+	local s3b = tProg:Section("Talent Cards")
+	C.talentAuto = s3b:Toggle({Text="Auto-Pick Best Card", Default=false, Callback=function(v) talentOn=v end})
+	C.talentMin = s3b:Dropdown({Text="Reroll Until", Options={"Uncommon","Rare","Special","Legendary","Mythical","Extraordinary"}, Default="Rare", Callback=function(v) talentMin=v end})
+	C.talentReroll = s3b:Toggle({Text="Auto Reroll", Default=false, Callback=function(v) talentReroll=v end})
+	s3b:Button({Text="Pick Best Card Now", Callback=function()
+		local c = pendingChoice()
+		if c then
+			local b = bestCard(c.Hand)
+			if b then notify("Picking " .. b) callSvc("TalentService","Choose",b) end
+		else notify("No pending talent choice") end
+	end})
+
+	local sCombat = tCombat:Section("Combat")
+	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
+	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
+	C.parryRange = sCombat:Slider({Text="Parry Range", Min=8, Max=30, Default=16, Callback=function(v) parryRange=v end})
+	C.parryDelay = sCombat:Slider({Text="Parry Timing", Description="Hundredths of a second before impact.", Min=20, Max=60, Default=32, Callback=function(v) parryDelay=v/100 end})
+	C.skills = sCombat:Toggle({Text="Auto Skills", Default=false, Callback=function(v) skillOn=v end})
+	C.grip = sCombat:Toggle({Text="Auto Grip", Default=false, Callback=function(v) gripOn=v end})
+
+	local sWeap = tCombat:Section("Weapon")
+	local wNames, wByName = {}, {}
+	for _, w in pairs(weapons()) do
+		local lbl = w.name .. " (" .. w.dmg .. " dmg)"
+		wNames[#wNames+1] = lbl; wByName[lbl] = w
+	end
+	if #wNames == 0 then wNames = {"Fists"} end
+	C.weaponByName = wByName
+	C.weapon = sWeap:Dropdown({Text="Weapon", Options=wNames, Default=wNames[1], Callback=function(v)
+		local w = wByName[v]
+		if w then weaponChoice = w.name end
+	end})
+	sWeap:Button({Text="Equip Selected", Callback=function()
+		local w = weaponChoice and (function() for _, x in pairs(weapons()) do if x.name == weaponChoice then return x end end end)() or weapons()[1]
+		if w then
+			local ok = equipWeapon(w.uuid)
+			notify(ok and ("Equipped " .. w.name) or "Equip failed")
+		end
+	end})
+	C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
+
+	local s4 = tFarm:Section("Auto Farm")
+	C.farmTarget = s4:Dropdown({Text="Target", Options={"Forest Brawler","Cave Brawler","Mole Rat","Foxbear Hunter","Black Blick","Stone Eye","Sandy Storm","Crimson Flame","Beach King","Master of the Swamp"}, Default="Forest Brawler", Callback=function(v) farmTarget=v end})
+	C.farmPos = s4:Dropdown({Text="Position", Options={"Above","Behind","Below"}, Default="Above", Callback=function(v)
+		farmPos=v
+		if v=="Below" and C.farmFloat then C.farmFloat:Set(true) end 
+	end})
+	C.farmDist = s4:Slider({Text="Distance", Min=3, Max=40, Default=8, Callback=function(v) farmDist=v end})
+	C.farmYOff = s4:Slider({Text="Y Offset", Min=-15, Max=30, Default=0, Callback=function(v) farmYOff=v end})
+	C.farmFloat = s4:Toggle({Text="Float", Default=true, Callback=function(v) farmFloat=v end})
+	C.farm = s4:Toggle({Text="Auto Farm", Default=false, Callback=function(v)
+		farmOn=v auraOn=v
+		if C.aura then C.aura:Set(v) end
+		notify(v and ("Farming " .. farmTarget) or "Farm off")
+	end})
+	C.antiAFK = s4:Toggle({Text="Anti-AFK", Default=false, Callback=function(v) setAntiAFK(v) end})
+	C.alert = s4:Toggle({Text="Player Alert", Default=false, Callback=function(v) alertOn=v end})
+
+	local s4b = tFarm:Section("Auto Quest")
+	C.quest = s4b:Dropdown({Text="Quest", Options={"KillForestBrawler","KillCaveBrawler"}, Default="KillForestBrawler", Callback=function(v) questId=v end})
+	s4b:TextBox({Text="Custom Quest Id", Placeholder="e.g. KillMoleRat", Callback=function(v) if #v>0 then questId=v end end})
+	C.autoQuest = s4b:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
+
+	local s4c = tFarm:Section("Chests")
+	C.chests = s4c:Toggle({Text="Auto Chests", Default=false, Callback=function(v) chestOn=v end})
+
+	local s4d = tFarm:Section("Gathering")
+	C.mine = s4d:Toggle({Text="Auto Mine", Description="Hops ore nodes and swings. Needs a pickaxe equipped.", Default=false, Callback=function(v) mineOn=v end})
+	C.fish = s4d:Toggle({Text="Auto Fish", Description="Casts, waits for the bite, reels in. Needs a rod equipped.", Default=false, Callback=function(v) fishOn=v end})
+
+	local s5 = tMove:Section("Movement")
+	C.noclip = s5:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
+	C.fly = s5:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
+	C.flySpeed = s5:Slider({Text="Fly Speed", Min=20, Max=150, Default=60, Callback=function(v) flySpeed=v end})
+	C.infJump = s5:Toggle({Text="Infinite Jump", Default=false, Callback=function(v) infJumpOn=v end})
+	C.clickTP = s5:Toggle({Text="Click TP", Default=false, Callback=function(v) clickTPOn=v end})
+	C.ws = s5:Toggle({Text="WalkSpeed", Description="May trip the movement audit at high values.", Default=false, Callback=function(v) wsOn=v end})
+	C.wsVal = s5:Slider({Text="WalkSpeed Value", Min=16, Max=120, Default=40, Callback=function(v) wsVal=v end})
+
+	local s5b = tMove:Section("Travel")
+	local cfNames, cfChoice = {}, "Campfire10"
+	do
+		local uc = playerData() and playerData():FindFirstChild("UnlockedCampfires")
+		if uc then for _, x in pairs(uc:GetChildren()) do cfNames[#cfNames+1] = x.Name end end
+		table.sort(cfNames)
+		if #cfNames == 0 then cfNames = {"Campfire10"} end
+		cfChoice = cfNames[1]
+	end
+	C.campfire = s5b:Dropdown({Text="Campfire", Options=cfNames, Default=cfNames[1], Callback=function(v) cfChoice=v end})
+	s5b:Button({Text="Fast Travel", Callback=function()
+		local ok,res = callSvc("CampfireService","FastTravel",cfChoice)
+		notify("Fast travel " .. cfChoice .. ": " .. tostring(res or ok))
+	end})
+	s5b:Button({Text="Set Spawn", Callback=function()
+		callSvc("CampfireService","SetSpawn",cfChoice)
+		notify("Spawn set: " .. cfChoice)
+	end})
+	s5b:Button({Text="Teleport to Spawn", Callback=function()
+		local sp = workspace:FindFirstChildOfClass("SpawnLocation")
+		if sp then moveTo(sp.CFrame + Vector3.new(0,5,0)) notify("Teleported to spawn") end
+	end})
+	s5b:Button({Text="Server Hop", Callback=function()
+		notify("Hopping server...")
+		pcall(function() TeleportService:Teleport(game.PlaceId, lp) end)
+	end})
+
+	local s6 = tVis:Section("ESP")
+	C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
+	C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
+	C.esp_chests = s6:Toggle({Text="Chests", Default=false, Callback=function(v) espOn.chests=v refreshESP() end})
+	C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
+	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
+
+	local s7 = tCred:Section("Credits")
+	s7:Label("Credits: Mythios Hub")
+	s7:Label("https://mythios.online/v/rivalsuilib")
+	s7:Button({Text="Copy Discord Link", Callback=function()
+		if clipSet then clipSet("https://mythios.online/discord") notify("Discord link copied") end
+	end})
+	s7:Button({Text="Unload Hub", Danger=true, Callback=function()
+		if ENV.BeyondNenHub then ENV.BeyondNenHub.Destroy() end
+	end})
+
+	local s8 = tCred:Section("Config")
+	s8:Button({Text="Save Config", Callback=function() saveConfig() notify("Config saved") end})
+	s8:Label("Auto-loads on launch. The hub re-runs itself after teleports.")
+end)
+
+local function destroy()
+	dead = true
+	farmMob = nil
+	local c = char()
+	if c then for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
+	for _,c in pairs(connections) do pcall(function() c:Disconnect() end) end
+	for _,c in pairs(watched) do pcall(function() c:Disconnect() end) end
+	for _,i in pairs(injected) do pcall(function() i:Destroy() end) end
+	setAntiAFK(false); clearESP(); setFB(false)
+	pcall(function() if window.Destroy then window:Destroy() end end)
+end
+ENV.BeyondNenHub = {Destroy = destroy, Window = window}
+print("[BNH] hub loaded")
