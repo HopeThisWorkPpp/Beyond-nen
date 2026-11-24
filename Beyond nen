@@ -1,4 +1,4 @@
--- Beyond Nen (Deobfuscated / Cleaned)
+-- Zentynal Hub (Beyond Nen)
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -12,16 +12,18 @@ local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
-ENV.BeyondNenHub = ENV.BeyondNenHub or nil
-if ENV.BeyondNenHub and ENV.BeyondNenHub.Destroy then pcall(ENV.BeyondNenHub.Destroy) end
+ENV.ZentynalHub = ENV.ZentynalHub or nil
+if ENV.ZentynalHub and ENV.ZentynalHub.Destroy then pcall(ENV.ZentynalHub.Destroy) end
+
 local function isFn(x) return type(x) == "function" end
 local function safeGetHui()
 	if isFn(gethui) then local ok, h = pcall(gethui) if ok and h then return h end end
 	return game:GetService("CoreGui")
 end
+
 for _, p in pairs({safeGetHui(), game:GetService("CoreGui"), lp:FindFirstChild("PlayerGui")}) do
 	if p then for _, g in pairs(p:GetChildren()) do
-		if g.Name == "BeyondNenHub" or g.Name == "BeyondNenHubHint" then pcall(function() g:Destroy() end) end
+		if g.Name == "ZentynalHub" or g.Name == "ZentynalHubHint" then pcall(function() g:Destroy() end) end
 	end end
 end
 
@@ -57,13 +59,14 @@ end
 
 local function isLibSource(s)
 	return type(s) == "string"
-		and s:find("MythiOs UI Library", 1, true)
+		and s:find("MythiOs UI Library", 1, true) -- Keep this, the UI lib from server is still called MythiOs
 		and s:find("api:Toggle", 1, true)
 		and s:find("return Library", 1, true)
 		and not s:find("premium", 1, true)
 		and not s:find("freemium", 1, true)
 		and not s:find("loadstring", 1, true)
 end
+
 local lib
 do
 	local src
@@ -76,9 +79,9 @@ do
 	while not done and os.clock() - t0 < 10 do task.wait(0.1) end
 	if isLibSource(res) then
 		src = res
-		if isFn(writefile) then pcall(writefile, "QA Scripts/mythios_lib.lua", res) end
-	elseif isFn(isfile) and isFn(readfile) and isfile("QA Scripts/mythios_lib.lua") then
-		local cached = readfile("QA Scripts/mythios_lib.lua")
+		if isFn(writefile) then pcall(writefile, "Zentynal/mythios_lib.lua", res) end
+	elseif isFn(isfile) and isFn(readfile) and isfile("Zentynal/mythios_lib.lua") then
+		local cached = readfile("Zentynal/mythios_lib.lua")
 		if isLibSource(cached) then src = cached end
 	end
 	if src then
@@ -89,12 +92,14 @@ do
 		end
 	end
 end
+
 if not lib then
-	error("[BeyondNenHub] UI library failed to load (mythios.online unreachable or served non-lib content)")
+	error("[ZentynalHub] UI library failed to load (server unreachable or served non-lib content)")
 end
+
 local window = lib:CreateWindow({
-	Title = "Mythios Hub", Subtitle = "Beyond Nen",
-	ToggleKey = Enum.KeyCode.RightShift, Name = "BeyondNenHub",
+	Title = "Zentynal", Subtitle = "Beyond Nen",
+	ToggleKey = Enum.KeyCode.RightShift, Name = "ZentynalHub",
 })
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
@@ -820,7 +825,7 @@ pcall(function()
 	end))
 end)
 
-local CFG = "BeyondNenHub.json"
+local CFG = "ZentynalHub.json"
 local function saveConfig()
 	local data = {
 		farmOn=farmOn, farmTarget=farmTarget, farmPos=farmPos, farmDist=farmDist, farmYOff=farmYOff, farmFloat=farmFloat,
@@ -873,7 +878,7 @@ local function loadConfig()
 end
 task.delay(1, loadConfig)
 if queueTP then
-	pcall(function() queueTP('local s; if type(isfile)=="function" then for _,p in pairs({"QA Scripts/BeyondNenHub.lua","BeyondNenHub.lua"}) do if isfile(p) then s=readfile(p) break end end end; if s then loadstring(s)() end') end)
+	pcall(function() queueTP('local s; if type(isfile)=="function" then for _,p in pairs({"Zentynal/ZentynalHub.lua","ZentynalHub.lua"}) do if isfile(p) then s=readfile(p) break end end end; if s then loadstring(s)() end') end)
 end
 
 local espOn = {players=false, mobs=false, chests=false, bosses=false}
@@ -885,11 +890,11 @@ end
 local function tagESP(inst, text, color)
 	if not inst or not inst:IsA("PVInstance") then return end
 	local bb = Instance.new("BillboardGui")
-	bb.Name = "BNH_ESP"; bb.AlwaysOnTop = true; bb.Size = UDim2.fromOffset(120,40); bb.StudsOffset = Vector3.new(0,3,0)
+	bb.Name = "ZNT_ESP"; bb.AlwaysOnTop = true; bb.Size = UDim2.fromOffset(120,40); bb.StudsOffset = Vector3.new(0,3,0)
 	bb.Adornee = inst; bb.Parent = inst
 	local t = Instance.new("TextLabel"); t.BackgroundTransparency = 1; t.Size = UDim2.fromScale(1,1)
 	t.Text = text; t.TextColor3 = color; t.TextStrokeTransparency = 0.5; t.Font = Enum.Font.GothamBold; t.TextSize = 12; t.Parent = bb
-	local hl = Instance.new("Highlight"); hl.Name = "BNH_ESP"; hl.FillColor = color; hl.FillTransparency = 0.85; hl.OutlineColor = color; hl.Parent = inst
+	local hl = Instance.new("Highlight"); hl.Name = "ZNT_ESP"; hl.FillColor = color; hl.FillTransparency = 0.85; hl.OutlineColor = color; hl.Parent = inst
 	track(bb); track(hl); espObjs[#espObjs+1] = bb; espObjs[#espObjs+1] = hl
 end
 local mobNames = {"Forest Brawler","Cave Brawler","Foxbear Hunter","Mole Rat","Black Blick","Stone Eye","Sandy Storm","Crimson Flame","Fox Bear"}
@@ -1063,13 +1068,13 @@ task.delay(0.5, function()
 	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
 
 	local s7 = tCred:Section("Credits")
-	s7:Label("Credits: Mythios Hub")
-	s7:Label("https://mythios.online/v/rivalsuilib")
+	s7:Label("Credits: Zentynal Hub")
+	s7:Label("https://discord.gg/qrRjkjeBn5")
 	s7:Button({Text="Copy Discord Link", Callback=function()
-		if clipSet then clipSet("https://mythios.online/discord") notify("Discord link copied") end
+		if clipSet then clipSet("https://discord.gg/qrRjkjeBn5") notify("Discord link copied") end
 	end})
 	s7:Button({Text="Unload Hub", Danger=true, Callback=function()
-		if ENV.BeyondNenHub then ENV.BeyondNenHub.Destroy() end
+		if ENV.ZentynalHub then ENV.ZentynalHub.Destroy() end
 	end})
 
 	local s8 = tCred:Section("Config")
@@ -1088,5 +1093,5 @@ local function destroy()
 	setAntiAFK(false); clearESP(); setFB(false)
 	pcall(function() if window.Destroy then window:Destroy() end end)
 end
-ENV.BeyondNenHub = {Destroy = destroy, Window = window}
-print("[BNH] hub loaded")
+ENV.ZentynalHub = {Destroy = destroy, Window = window}
+print("[Zentynal] hub loaded")
