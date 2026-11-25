@@ -1,4 +1,4 @@
--- Zentynal Hub (Beyond Nen) - Full with Story Automation v3 (Story Quest System Rewrite)
+-- Zentynal Hub (Beyond Nen) - Full with Story Automation v4 (Storyline Board Chain)
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -357,8 +357,15 @@ local function questMob(qid)
 	end
 end
 
+local function playerData()
+	local d = lp:FindFirstChild("Data")
+	local ss = d and d:FindFirstChild("SavesSlot")
+	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
+	return slot and slot:FindFirstChild("PlayerData")
+end
+
 -- ============================================================
--- STORY QUEST SYSTEM (new)
+-- STORY QUEST SYSTEM
 -- ============================================================
 local function findQuestNPC(npcName)
 	local questFolder = worldChild("Quests")
@@ -638,20 +645,127 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- STORYLINE BOARD SYSTEM
+-- STORYLINE BOARD SYSTEM (dump-confirmed config)
 -- ============================================================
-local BOARDS = {
-	WhaleIslandTown   = { name = "Whale Island Town Quest Board",   npc = "Sarah"   },
-	CrimsonCamp       = { name = "Crimson Camp Quest Board",         npc = "Zeal"    },
-	Farm              = { name = "Farm Quest Board",                 npc = "Roger"   },
-	BlickCastle       = { name = "Blick Castle Quest board",         npc = "Nora"    },
-	Mines             = { name = "Mines Quest Board",                npc = "Jacob"   },
-	WhaleIslandBeach  = { name = "Whale Island Beach Quest Board",   npc = "Kato"    },
-	DeepForest        = { name = "Deep Forest Quest Board",          npc = "Lily"    },
-	Swamp             = { name = "Swamp Quest board",                npc = "Victor"  },
-	VolcanicArea      = { name = "Volcanic Area Quest Board",        npc = "Florence"},
+local STORYLINE_BOARDS = {
+	{ boardId="WhaleIslandTown",  boardName="Whale Island Town Quest Board",  npc="Sarah",    levelReq=1,   quests={"KillForestBrawler","KillCaveBrawler"} },
+	{ boardId="CrimsonCamp",      boardName="Crimson Camp Quest Board",        npc="Zeal",     levelReq=15,  quests={"KillCrimsonFlame"} },
+	{ boardId="Farm",             boardName="Farm Quest Board",                npc="Roger",    levelReq=20,  quests={"KillMoleRat","KillFoxbearHunter"} },
+	{ boardId="BlickCastle",      boardName="Blick Castle Quest board",        npc="Nora",     levelReq=35,  quests={"KillBlackBlick"} },
+	{ boardId="Mines",            boardName="Mines Quest Board",               npc="Jacob",    levelReq=50,  quests={"KillStoneEye"} },
+	{ boardId="WhaleIslandBeach", boardName="Whale Island Beach Quest Board",  npc="Kato",     levelReq=65,  quests={"KillSandyStorm","KillBeachKing"} },
+	{ boardId="DeepForest",       boardName="Deep Forest Quest Board",         npc="Lily",     levelReq=80,  quests={"KillFoxbearHunter"} },
+	{ boardId="Swamp",            boardName="Swamp Quest board",               npc="Victor",   levelReq=100, quests={"KillMasterOfTheSwamp"} },
+	{ boardId="VolcanicArea",     boardName="Volcanic Area Quest Board",       npc="Florence", levelReq=120, quests={"KillCrimsonFlame"} },
 }
 
+local function boardState(boardId)
+	return lp:GetAttribute("SB_" .. boardId) or "Intro"
+end
+
+local function allBoardQuestsDone(boardDef)
+	local d = lp:FindFirstChild("Data")
+	local ss = d and d:FindFirstChild("SavesSlot")
+	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
+	local pd = slot and slot:FindFirstChild("PlayerData")
+	local cq = pd and pd:FindFirstChild("CompletedQuests")
+	if not cq then return false end
+
+	local qbs = worldChild("Quest Boards")
+	local boardModel = qbs and qbs:FindFirstChild(boardDef.boardName)
+	local boardFolder = boardModel and boardModel:FindFirstChild("Board")
+	local quests = {}
+	if boardFolder then
+		for _, s in pairs(boardFolder:GetChildren()) do
+			local qid = s:GetAttribute("Quest")
+			if type(qid) == "string" and #qid > 0 then
+				table.insert(quests, qid)
+			end
+		end
+	else
+		quests = boardDef.quests
+	end
+	for _, qid in ipairs(quests) do
+		if not (cq:FindFirstChild(qid) or cq:GetAttribute(qid) == true) then
+			return false
+		end
+	end
+	return #quests > 0
+end
+
+local function findBoardNPC(boardDef)
+	local qbs = worldChild("Quest Boards")
+	local boardModel = qbs and qbs:FindFirstChild(boardDef.boardName)
+	if boardModel then
+		for _, m in pairs(boardModel:GetDescendants()) do
+			if m:IsA("Model") and m.Name == boardDef.npc then
+				local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if pp then return m, pp end
+			end
+		end
+		local anchor = boardModel:FindFirstChild("NpcAnchor", true)
+		if anchor then
+			local pp = boardModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+			if pp then return anchor, pp end
+		end
+	end
+	local bdNpcs = worldChild("BetterDialogNpcs")
+	if bdNpcs then
+		local m = bdNpcs:FindFirstChild(boardDef.npc)
+		if m then
+			local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
+			if pp then return m, pp end
+		end
+	end
+	local world = workspace:FindFirstChild("World")
+	if world then
+		for _, m in pairs(world:GetDescendants()) do
+			if m:IsA("Model") and m.Name == boardDef.npc then
+				local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if pp then return m, pp end
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function talkToBoardNPC(boardDef)
+	local m, pp = findBoardNPC(boardDef)
+	if not (m and pp) then
+		notify("NPC not found: " .. boardDef.npc)
+		return false
+	end
+	local pos = m:IsA("Model") and m:GetPivot().Position
+		or m:IsA("BasePart") and m.Position
+	if not pos then return false end
+	local c = char(); if not c then return false end
+	c:PivotTo(CFrame.new(pos + Vector3.new(0, 0, 4)))
+	task.wait(0.3)
+	pcall(function() firePP(pp) end)
+	task.wait(0.6)
+	return true
+end
+
+local function unlockBoard(boardDef)
+	local state = boardState(boardDef.boardId)
+	if state ~= "Intro" and state ~= nil then return true end
+	local ok = talkToBoardNPC(boardDef)
+	if not ok then return false end
+	callSvc("StorylineBoardService", "unlock", boardDef.boardId)
+	task.wait(0.8)
+	return boardState(boardDef.boardId) ~= "Intro"
+end
+
+local function claimBoard(boardDef)
+	local ok = talkToBoardNPC(boardDef)
+	if not ok then return false end
+	callSvc("StorylineBoardService", "claim", boardDef.boardId)
+	task.wait(0.8)
+	notify("Claimed: " .. boardDef.boardName)
+	return true
+end
+
+-- Board folder quest cache + accept helper (shared with manual board quest system)
 local boardCache = {}
 local function scanBoards()
 	local qbs = worldChild("Quest Boards")
@@ -735,130 +849,135 @@ local function acceptBoardQuest(qid)
 	return accepted
 end
 
--- Board NPC helper (for unlock/claim via NPC gatekeeper)
-local function findNPCByMap(npcName)
-	local world = workspace:FindFirstChild("World")
-	local root = world or workspace
-	for _, m in pairs(root:GetDescendants()) do
-		if m:IsA("Model") and m.Name == npcName then
-			local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
-			if pp then return m, pp end
+-- Run all quests for one board (used by autoStoryline)
+local function runBoardQuests(boardDef)
+	notify("Running quests for: " .. boardDef.boardName)
+	local qbs = worldChild("Quest Boards")
+	local boardModel = qbs and qbs:FindFirstChild(boardDef.boardName)
+	local boardFolder = boardModel and boardModel:FindFirstChild("Board")
+	local quests = {}
+	if boardFolder then
+		for _, slot in pairs(boardFolder:GetChildren()) do
+			local qid = slot:GetAttribute("Quest")
+			if type(qid) == "string" and #qid > 0 then
+				table.insert(quests, qid)
+			end
+		end
+	else
+		quests = boardDef.quests
+	end
+
+	for _, qid in ipairs(quests) do
+		if isQuestDone(qid) then
+			notify(qid .. " already done")
+			continue
+		end
+
+		local mob = questMob(qid)
+		if mob then
+			farmTarget = mob
+			if C.farmTarget then C.farmTarget:Set(mob) end
+			farmOn = true; auraOn = true
+			if C.aura then C.aura:Set(true) end
+			if C.farm then C.farm:Set(true) end
+		end
+
+		local nextTry = 0
+		local accepted = false
+		local attempts = 0
+		while not accepted and attempts < 5 do
+			attempts = attempts + 1
+			if tick() >= nextTry then
+				accepted = acceptBoardQuest(qid)
+				if not accepted then nextTry = tick() + 10 end
+			end
+			task.wait(2)
+		end
+		if not accepted then
+			notify(qid .. " failed to accept, skipping")
+			continue
+		end
+
+		notify("Doing: " .. qid)
+		local timeout = tick() + 600
+		while not isQuestDone(qid) and tick() < timeout do
+			local aq = activeQuests()
+			local q = aq and aq:FindFirstChild(qid)
+			if q then
+				callSvc("QuestsService", "collect", qid)
+			elseif not isQuestDone(qid) then
+				accepted = acceptBoardQuest(qid)
+			end
+			task.wait(3)
+		end
+
+		if isQuestDone(qid) then
+			notify(qid .. " done!")
+		else
+			notify(qid .. " timed out")
 		end
 	end
+
+	farmOn = false; auraOn = false
+	if C.farm then C.farm:Set(false) end
+	if C.aura then C.aura:Set(false) end
 end
 
-local function unlockStorylineBoard(boardId)
-	local npcName
-	for n, b in pairs(BOARDS) do
-		if n == boardId then npcName = b.npc break end
-	end
-	if not npcName then notify("No NPC found for board: " .. boardId) return false end
-	local state = lp:GetAttribute("SB_" .. boardId)
-	if state and state ~= "Intro" then
-		notify(boardId .. " board already unlocked (state: " .. tostring(state) .. ")")
-		return true
-	end
-	local m, pp = findNPCByMap(npcName)
-	if not (m and pp) then notify(npcName .. " NPC not found.") return false end
-	notify("Talking to " .. npcName .. " to unlock " .. boardId .. " board...")
-	moveTo(m:GetPivot() + Vector3.new(0, 0, 3))
-	task.wait(0.4)
-	pcall(function() firePP(pp) end)
-	task.wait(0.5)
-	local ok = callSvc("StorylineBoardService", "unlock", boardId)
-	task.wait(0.8)
-	local newState = lp:GetAttribute("SB_" .. boardId)
-	if newState and newState ~= "Intro" then
-		notify(boardId .. " board unlocked!")
-		return true
-	end
-	notify("Talked to " .. npcName .. " — board may need dialog steps.")
-	return false
-end
-
-local function claimStorylineBoard(boardId)
-	local npcName
-	for n, b in pairs(BOARDS) do
-		if n == boardId then npcName = b.npc break end
-	end
-	if not npcName then return false end
-	local m, pp = findNPCByMap(npcName)
-	if not (m and pp) then notify(npcName .. " not found for claim.") return false end
-	notify("Claiming " .. boardId .. " board reward from " .. npcName .. "...")
-	moveTo(m:GetPivot() + Vector3.new(0, 0, 3))
-	task.wait(0.4)
-	pcall(function() firePP(pp) end)
-	task.wait(0.5)
-	callSvc("StorylineBoardService", "claim", boardId)
-	task.wait(0.5)
-	notify(boardId .. " board claimed!")
-	return true
-end
-
-local autoBoardOn, autoBoardTarget, autoBoardBusy = false, "WhaleIslandBeach", false
+local autoStoryline = false
 task.spawn(function()
 	while not dead do
-		if autoBoardOn and not autoBoardBusy then
-			autoBoardBusy = true
-			local boardId = autoBoardTarget
-			local state = lp:GetAttribute("SB_" .. boardId)
-			if not state or state == "Intro" then
-				unlockStorylineBoard(boardId)
-				task.wait(2)
-				state = lp:GetAttribute("SB_" .. boardId)
-			end
-			if state == "Unlocked" or state == nil then
-				if not next(boardCache) then scanBoards() end
-				local boardName = BOARDS[boardId] and BOARDS[boardId].name
-				local bd = boardName and boardCache[boardName]
-				if bd then
-					for _, qid in ipairs(bd.quests) do
-						if not autoBoardOn then break end
-						local aq = activeQuests()
-						local q = aq and aq:FindFirstChild(qid)
-						if not q then
-							acceptBoardQuest(qid)
-							task.wait(1)
-						end
-						local mob = questMob(qid)
-						if mob then
-							farmTarget = mob
-							if C.farmTarget then C.farmTarget:Set(mob) end
-							farmOn = true; auraOn = true
-							if C.aura then C.aura:Set(true) end
-							local timeout = tick() + 300
-							while autoBoardOn and tick() < timeout do
-								local aq2 = activeQuests()
-								local q2 = aq2 and aq2:FindFirstChild(qid)
-								if q2 then
-									callSvc("QuestsService", "collect", qid)
-									task.wait(1)
-									local aq3 = activeQuests()
-									if not (aq3 and aq3:FindFirstChild(qid)) then
-										notify(qid .. " done!")
-										break
-									end
-								else
-									break
-								end
-								task.wait(3)
-							end
-							farmOn = false
-						end
+		if autoStoryline then
+			local playerLevel = tonumber(attr("Level")) or 0
+			local didSomething = false
+
+			for _, boardDef in ipairs(STORYLINE_BOARDS) do
+				if playerLevel < boardDef.levelReq then
+					notify("Need level " .. boardDef.levelReq .. " for " .. boardDef.boardName)
+					break
+				end
+
+				local state = boardState(boardDef.boardId)
+
+				if state == "Intro" or state == nil then
+					didSomething = true
+					notify("Unlocking: " .. boardDef.boardName .. " (talk to " .. boardDef.npc .. ")")
+					if not unlockBoard(boardDef) then
+						notify("Failed to unlock " .. boardDef.boardName .. " — retrying in 15s")
+						task.wait(15)
 					end
+					break
+				elseif state == "Active" then
+					if not allBoardQuestsDone(boardDef) then
+						didSomething = true
+						runBoardQuests(boardDef)
+						break
+					else
+						didSomething = true
+						notify("All quests done for " .. boardDef.boardName .. " — claiming reward")
+						claimBoard(boardDef)
+						break
+					end
+				elseif state == "Complete" then
+					continue
 				end
 			end
-			local finalState = lp:GetAttribute("SB_" .. boardId)
-			if finalState == "Complete" then
-				claimStorylineBoard(boardId)
+
+			if not didSomething then
+				notify("All storyline boards complete!")
+				autoStoryline = false
+				if C.autoStoryline then C.autoStoryline:Set(false) end
 			end
-			autoBoardBusy = false
+
+			task.wait(5)
+		else
+			task.wait(1)
 		end
-		task.wait(3)
 	end
 end)
 
--- Board quest auto loop
+-- ============================================================
+-- MANUAL BOARD QUEST AUTO LOOP
+-- ============================================================
 local questId, autoQuest = "KillForestBrawler", false
 task.spawn(function()
 	local nextTry = 0
@@ -895,9 +1014,8 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- Rest of the original systems (chests, farm, parry, skills, etc.)
+-- REST: chests, farm, parry, skills, weapons, talents, etc.
 -- ============================================================
-
 local chestOn = false
 task.spawn(function()
 	while not dead do
@@ -1009,12 +1127,6 @@ end
 if CN then bindCNLate(CN) end
 
 local skillOn = false
-local function playerData()
-	local d = lp:FindFirstChild("Data")
-	local ss = d and d:FindFirstChild("SavesSlot")
-	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
-	return slot and slot:FindFirstChild("PlayerData")
-end
 local function equippedSkills()
 	local out, seen = {}, {}
 	local function add(n) if n and n ~= "" and not n:find("Empty") and not seen[n] then seen[n] = true out[#out+1] = n end end
@@ -1302,8 +1414,7 @@ local function saveConfig()
 		autoQuest=autoQuest, questId=questId, chestOn=chestOn, alertOn=alertOn,
 		wsOn=wsOn, wsVal=wsVal, talentOn=talentOn, talentReroll=talentReroll, talentMin=talentMin,
 		espOn=espOn, mineOn=mineOn, fishOn=fishOn, medOn=medOn, antiAFK=(afkConn ~= nil),
-		autoBoardOn=autoBoardOn, autoBoardTarget=autoBoardTarget,
-		autoStory=autoStory,
+		autoStory=autoStory, autoStoryline=autoStoryline,
 	}
 	local ok, j = pcall(function() return HttpService:JSONEncode(data) end)
 	if ok and isFn(writefile) then writefile(CFG, j) end
@@ -1315,7 +1426,7 @@ local CFG_MAP = {
 	autoQuest="autoQuest", chestOn="chests", alertOn="alert", wsOn="ws", wsVal="wsVal",
 	talentOn="talentAuto", talentReroll="talentReroll", talentMin="talentMin",
 	mineOn="mine", fishOn="fish", medOn="meditate", antiAFK="antiAFK",
-	autoBoardOn="autoBoardOn", autoStory="autoStory",
+	autoStory="autoStory", autoStoryline="autoStoryline",
 }
 local function loadConfig()
 	if not (isFn(isfile) and isfile(CFG)) then return end
@@ -1334,9 +1445,6 @@ local function loadConfig()
 			elseif k == "questId" then
 				questId = v
 				if C.quest then C.quest:Set(v) end
-			elseif k == "autoBoardTarget" then
-				autoBoardTarget = v
-				if C.boardTarget then C.boardTarget:Set(v) end
 			elseif k == "weaponChoice" then
 				weaponChoice = v
 				if C.weapon and C.weaponByName then
@@ -1424,106 +1532,55 @@ task.delay(0.5, function()
 	local tVis    = window:AddTab("Visuals")
 	local tCred   = window:AddTab("Credits")
 
-	-- ============================================================
 	-- STORY QUESTS TAB
-	-- ============================================================
 	local sStory = tStory:Section("Auto Story")
 	sStory:Label("Runs StarterQuest → StarterWeapon → ActivateNen → WaysOfNen in order.")
-	C.autoStory = sStory:Toggle({
-		Text = "Auto Story Quest",
-		Description = "Runs the full story chain sequentially.",
-		Default = false,
-		Callback = function(v) autoStory = v end
-	})
-	sStory:Button({Text = "Run Next Story Quest", Callback = function()
+	C.autoStory = sStory:Toggle({Text="Auto Story Quest", Description="Runs the full story chain sequentially.", Default=false, Callback=function(v) autoStory = v end})
+	sStory:Button({Text="Run Next Story Quest", Callback=function()
 		task.spawn(function()
 			for _, qid in ipairs(STORY_ORDER) do
-				if not isQuestDone(qid) then
-					runStoryQuest(qid)
-					return
-				end
+				if not isQuestDone(qid) then runStoryQuest(qid) return end
 			end
 			notify("All story quests done")
 		end)
 	end})
-	sStory:Button({Text = "Status", Callback = function()
+	sStory:Button({Text="Status", Callback=function()
 		for _, qid in ipairs(STORY_ORDER) do
 			local done = isQuestDone(qid)
 			local q, stage, prog = getStage(qid)
-			if done then
-				notify(qid .. ": DONE")
-			elseif q then
-				notify(qid .. ": stage " .. stage .. " (" .. prog .. " progress)")
-			else
-				notify(qid .. ": not started")
-			end
+			if done then notify(qid .. ": DONE")
+			elseif q then notify(qid .. ": stage " .. stage .. " (" .. prog .. " progress)")
+			else notify(qid .. ": not started") end
 		end
 	end})
 
 	local sStoryList = tStory:Section("Individual Quests")
 	for _, qid in ipairs(STORY_ORDER) do
-		sStoryList:Button({Text = "Run " .. qid, Callback = function()
-			task.spawn(function() runStoryQuest(qid) end)
-		end})
+		sStoryList:Button({Text="Run " .. qid, Callback=function() task.spawn(function() runStoryQuest(qid) end) end})
 	end
 
-	-- ============================================================
 	-- BOARD QUESTS TAB
-	-- ============================================================
-	local sBoardSel = tBoard:Section("Storyline Board Auto-Clear")
-	sBoardSel:Label("Unlocks board via NPC → farms all Kill quests → claims reward")
-
-	local boardKeys = {}
-	for k, _ in pairs(BOARDS) do boardKeys[#boardKeys+1] = k end
-	table.sort(boardKeys)
-
-	C.boardTarget = sBoardSel:Dropdown({
-		Text="Target Board",
-		Options=boardKeys,
-		Default="WhaleIslandBeach",
-		Callback=function(v)
-			autoBoardTarget = v
-			notify("Board target: " .. v)
+	local sBoardSel = tBoard:Section("Storyline Board Status")
+	sBoardSel:Label("Board states from SB_<BoardId>. Storyline auto-clear lives on Farm tab.")
+	for _, b in ipairs(STORYLINE_BOARDS) do
+		sBoardSel:Button({Text="Unlock " .. b.boardId .. " (" .. b.npc .. ")", Callback=function()
+			task.spawn(function() unlockBoard(b) end)
+		end})
+	end
+	sBoardSel:Button({Text="Check All Board States", Callback=function()
+		for _, b in ipairs(STORYLINE_BOARDS) do
+			local state = boardState(b.boardId)
+			local done = allBoardQuestsDone(b)
+			notify(b.npc .. " (" .. b.boardId .. "): " .. state .. (done and " [QUESTS DONE]" or ""))
 		end
-	})
-
-	C.autoBoardOn = sBoardSel:Toggle({Text="Auto Clear Board", Default=false, Callback=function(v)
-		autoBoardOn = v
-		notify(v and "Auto Board ON: " .. autoBoardTarget or "Auto Board OFF")
 	end})
-
-	sBoardSel:Button({Text="Unlock Board NPC Now", Callback=function()
-		task.spawn(function() unlockStorylineBoard(autoBoardTarget) end)
-	end})
-	sBoardSel:Button({Text="Claim Board Reward Now", Callback=function()
-		task.spawn(function() claimStorylineBoard(autoBoardTarget) end)
-	end})
-	sBoardSel:Button({Text="Scan All Boards (Refresh Cache)", Callback=function()
+	sBoardSel:Button({Text="Scan Boards (Refresh Cache)", Callback=function()
 		boardCache = {}
 		scanBoards()
 		notify("Boards scanned: " .. tostring(#boardCache) .. " cached")
 	end})
 
-	local sBoardStatus = tBoard:Section("Board Status")
-	sBoardStatus:Button({Text="Check Board States", Callback=function()
-		local lines = {}
-		for id, _ in pairs(BOARDS) do
-			local state = lp:GetAttribute("SB_" .. id) or "Intro (locked)"
-			table.insert(lines, id .. ": " .. tostring(state))
-		end
-		table.sort(lines)
-		notify(table.concat(lines, " | "))
-	end})
-
-	local sBoardQA = tBoard:Section("Per-Board Quick Actions")
-	for _, id in ipairs(boardKeys) do
-		local bd = BOARDS[id]
-		sBoardQA:Button({Text="Unlock " .. id .. " (" .. (bd and bd.npc or "?") .. ")", Callback=function()
-			task.spawn(function() unlockStorylineBoard(id) end)
-		end})
-	end
-
-	local sBoardQuest = tBoard:Section("Board Quest")
+	local sBoardQuest = tBoard:Section("Manual Board Quest")
 	local allQuests = {}
 	if next(boardCache) then
 		for _, data in pairs(boardCache) do
@@ -1537,14 +1594,11 @@ task.delay(0.5, function()
 		}
 	end
 	table.sort(allQuests)
-
 	C.quest = sBoardQuest:Dropdown({Text="Quest", Options=allQuests, Default=allQuests[1], Callback=function(v) questId=v end})
 	sBoardQuest:TextBox({Text="Custom Quest ID", Placeholder="e.g. KillMoleRat", Callback=function(v) if #v>0 then questId=v end end})
 	C.autoQuest = sBoardQuest:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
 
-	-- ============================================================
 	-- PROGRESSION TAB
-	-- ============================================================
 	local s3 = tProg:Section("Utility")
 	C.meditate = s3:Toggle({Text="Auto Meditate", Description="Sits at the nearest meditation spot and auto-answers prompts.", Default=false, Callback=function(v) medOn=v end})
 	s3:Button({Text="AFK Chamber", Callback=function()
@@ -1565,9 +1619,7 @@ task.delay(0.5, function()
 		else notify("No pending talent choice") end
 	end})
 
-	-- ============================================================
 	-- COMBAT TAB
-	-- ============================================================
 	local sCombat = tCombat:Section("Combat")
 	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
 	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
@@ -1597,9 +1649,7 @@ task.delay(0.5, function()
 	end})
 	C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
 
-	-- ============================================================
 	-- FARM TAB
-	-- ============================================================
 	local s4 = tFarm:Section("Auto Farm")
 	C.farmTarget = s4:Dropdown({
 		Text="Target",
@@ -1622,6 +1672,29 @@ task.delay(0.5, function()
 	C.antiAFK = s4:Toggle({Text="Anti-AFK", Default=false, Callback=function(v) setAntiAFK(v) end})
 	C.alert = s4:Toggle({Text="Player Alert", Default=false, Callback=function(v) alertOn=v end})
 
+	-- STORYLINE BOARDS (Farm tab, right after Auto Quest section)
+	local sStoryline = tFarm:Section("Storyline Boards")
+	C.autoStoryline = sStoryline:Toggle({
+		Text = "Auto Storyline",
+		Description = "Unlocks boards, farms all quests, claims rewards in order. Sarah → Zeal → Roger → Nora → Jacob → Kato → Lily → Victor → Florence",
+		Default = false,
+		Callback = function(v) autoStoryline = v end
+	})
+	sStoryline:Button({Text = "Board Status", Callback = function()
+		for _, b in ipairs(STORYLINE_BOARDS) do
+			local state = boardState(b.boardId)
+			local done = allBoardQuestsDone(b)
+			notify(b.npc .. " (" .. b.boardId .. "): " .. state .. (done and " [QUESTS DONE]" or ""))
+		end
+	end})
+	sStoryline:Button({Text = "Claim All Ready", Callback = function()
+		for _, b in ipairs(STORYLINE_BOARDS) do
+			if allBoardQuestsDone(b) and boardState(b.boardId) == "Active" then
+				claimBoard(b)
+			end
+		end
+	end})
+
 	local s4c = tFarm:Section("Chests")
 	C.chests = s4c:Toggle({Text="Auto Chests", Default=false, Callback=function(v) chestOn=v end})
 
@@ -1629,9 +1702,7 @@ task.delay(0.5, function()
 	C.mine = s4d:Toggle({Text="Auto Mine", Description="Hops ore nodes and swings. Needs a pickaxe equipped.", Default=false, Callback=function(v) mineOn=v end})
 	C.fish = s4d:Toggle({Text="Auto Fish", Description="Casts, waits for the bite, reels in. Needs a rod equipped.", Default=false, Callback=function(v) fishOn=v end})
 
-	-- ============================================================
 	-- MOVEMENT TAB
-	-- ============================================================
 	local s5 = tMove:Section("Movement")
 	C.noclip = s5:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
 	C.fly = s5:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
@@ -1668,9 +1739,7 @@ task.delay(0.5, function()
 		pcall(function() TeleportService:Teleport(game.PlaceId, lp) end)
 	end})
 
-	-- ============================================================
 	-- VISUALS TAB
-	-- ============================================================
 	local s6 = tVis:Section("ESP")
 	C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
 	C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
@@ -1678,9 +1747,7 @@ task.delay(0.5, function()
 	C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
 	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
 
-	-- ============================================================
 	-- CREDITS TAB
-	-- ============================================================
 	local s7 = tCred:Section("Credits")
 	s7:Label("Credits: Zentynal Hub")
 	s7:Label("https://discord.gg/qrRjkjeBn5")
@@ -1708,4 +1775,4 @@ local function destroy()
 	pcall(function() if window.Destroy then window:Destroy() end end)
 end
 ENV.ZentynalHub = {Destroy = destroy, Window = window}
-print("[Zentynal] hub loaded v3 (story quest system)")
+print("[Zentynal] hub loaded v4 (storyline board chain)")
