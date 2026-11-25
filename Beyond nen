@@ -1,4 +1,4 @@
--- Zentynal Hub (Beyond Nen) - v6 (Complete Quest System)
+-- Zentynal Hub (Beyond Nen) - v7 (StarterQuest stage 2 fixed)
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -433,7 +433,6 @@ local function waitForStage(qid, targetStage, timeout)
 	return false
 end
 
--- Board quest kill data (full list from QuestsHandlers dump)
 local BOARD_QUEST_DATA = {
 	KillForestBrawler   = { target = "Forest Brawler",        needs = 4  },
 	KillCaveBrawler     = { target = "Cave Brawler",          needs = 4  },
@@ -494,7 +493,7 @@ local STORYLINE_BOARDS = {
 	  quests={"KillCrimsonSwordsman","KillFlameWorshipper","KillVolcanoWarrior","KillFireSpirits","KillFireMaster","KillDrakolith"} },
 }
 
--- StarterQuest
+-- StarterQuest with fixed stage 2
 local function doStarterQuest()
 	if questDone("StarterQuest") then return true end
 	local q, stage = getActiveQuest("StarterQuest")
@@ -516,21 +515,117 @@ local function doStarterQuest()
 
 	if stage == 2 then
 		notify("StarterQuest: entering DianaMission")
-		local door = worldPath("Rooms","Entries","DianaMission")
+		local wasAura = auraOn
+
+		local function findDoor()
+			local entries = worldPath("Rooms","Entries","DianaMission")
+			if not entries then return nil end
+			if entries:IsA("BasePart") and entries.Name == "Door" then return entries end
+			for _, c in pairs(entries:GetDescendants()) do
+				if c:IsA("BasePart") and c.Name == "Door" then return c end
+			end
+			return entries:FindFirstChildWhichIsA("BasePart", true)
+		end
+
+		local door = findDoor()
 		if door then
-			local dp = door:IsA("Model") and door:GetPivot().Position or door:FindFirstChildWhichIsA("BasePart") and door:FindFirstChildWhichIsA("BasePart").Position
-			if dp then
-				char():PivotTo(CFrame.new(dp + Vector3.new(0, 0, 3)))
-				task.wait(0.4)
+			local dp = door:IsA("Model") and door:GetPivot().Position or door.Position
+			char():PivotTo(CFrame.new(dp + Vector3.new(0, 0, 5)))
+			task.wait(0.4)
+			local pp = door:FindFirstChildWhichIsA("ProximityPrompt", true)
+			if pp then pcall(function() firePP(pp) end) end
+			task.wait(1)
+		else
+			notify("StarterQuest: door not found — room may not have spawned yet")
+		end
+
+		notify("StarterQuest: waiting for InMission...")
+		local t0 = tick()
+		while lp:GetAttribute("InMission") ~= true and tick() - t0 < 15 do
+			task.wait(0.5)
+		end
+		if lp:GetAttribute("InMission") ~= true then
+			notify("StarterQuest: InMission never went true — retrying door")
+			if door then
 				local pp = door:FindFirstChildWhichIsA("ProximityPrompt", true)
 				if pp then pcall(function() firePP(pp) end) end
+				task.wait(2)
 			end
 		end
-		local wasAura = auraOn
+
+		notify("StarterQuest: inside DianaMission — fighting guards")
 		auraOn = true
-		notify("StarterQuest: fighting guards (wait up to 2 min)")
-		waitForStage("StarterQuest", 3, 120)
+		local stageNow = 2
+		local lastScan = 0
+
+		while stageNow < 3 and tick() - t0 < 240 do
+			local h = hrp()
+			if h and tick() - lastScan > 1 then
+				lastScan = tick()
+				local best, bd = nil, math.huge
+				for _, m in pairs(workspace:GetDescendants()) do
+					if m:IsA("Model") and (m:GetAttribute("Health") or 0) > 0 then
+						local hu = m:FindFirstChildOfClass("Humanoid")
+						if hu and hu.Health > 0 and m ~= char() and not Players:GetPlayerFromCharacter(m) then
+							local nl = m.Name:lower()
+							if not nl:find("april") and not nl:find("diana") then
+								local d = (m:GetPivot().Position - h.Position).Magnitude
+								if d < bd then bd, best = d, m end
+							end
+						end
+					end
+				end
+				if best then
+					pcall(function() char():PivotTo(CFrame.new(best:GetPivot().Position + Vector3.new(0, 0, 3))) end)
+				end
+			end
+			task.wait(0.5)
+			local _, s = getActiveQuest("StarterQuest")
+			stageNow = s or stageNow
+		end
 		auraOn = wasAura
+
+		if stageNow >= 3 then
+			notify("StarterQuest: guards cleared — finding April")
+			local april = nil
+			for _, m in pairs(workspace:GetDescendants()) do
+				if m:IsA("Model") and m.Name:lower():find("april") then
+					april = m break
+				end
+			end
+			if april then
+				local ap = april:GetPivot().Position
+				char():PivotTo(CFrame.new(ap + Vector3.new(0, 0, 3)))
+				task.wait(0.5)
+				for _, d in pairs(april:GetDescendants()) do
+					if d:IsA("ProximityPrompt") then
+						pcall(function() firePP(d) end)
+						task.wait(0.4)
+					end
+				end
+				task.wait(1)
+				local carryTool = lp.Backpack:FindFirstChild("April") or lp.Backpack:FindFirstChildWhichIsA("Tool")
+				if carryTool and hum() then hum():EquipTool(carryTool) end
+				task.wait(0.5)
+				door = findDoor()
+				if door then
+					local dp = door:IsA("Model") and door:GetPivot().Position or door.Position
+					char():PivotTo(CFrame.new(dp + Vector3.new(0, 0, 8)))
+					task.wait(2)
+				end
+			else
+				notify("StarterQuest: April not found")
+			end
+
+			notify("StarterQuest: waiting for escape...")
+			local t1 = tick()
+			while lp:GetAttribute("InMission") == true and tick() - t1 < 20 do
+				task.wait(0.5)
+			end
+		else
+			notify("StarterQuest: timed out waiting for guards")
+		end
+
 		stage = select(2, getActiveQuest("StarterQuest"))
 	end
 
@@ -546,7 +641,6 @@ local function doStarterQuest()
 	return questDone("StarterQuest")
 end
 
--- StarterWeapon
 local function doStarterWeapon()
 	if questDone("StarterWeapon") then return true end
 	if (tonumber(attr("Level")) or 0) < 5 then
@@ -620,7 +714,6 @@ local function doStarterWeapon()
 	return questDone("StarterWeapon")
 end
 
--- ActivateNen
 local function findRohan()
 	local npc = worldPath("Map","Map Locations","Nen Cave","ActivateNen")
 	if npc then
@@ -725,7 +818,6 @@ local function doActivateNen()
 	return questDone("ActivateNen")
 end
 
--- WaysOfNen
 local function doWaysOfNen()
 	if questDone("WaysOfNen") then return true end
 	if (tonumber(attr("Level")) or 0) < 6 then
@@ -809,7 +901,6 @@ task.spawn(function()
 	end
 end)
 
--- Storyline board system
 local function boardState(id) return lp:GetAttribute("SB_" .. id) or "Intro" end
 
 local function allBoardQuestsDone(boardDef)
@@ -991,7 +1082,6 @@ task.spawn(function()
 	end
 end)
 
--- Manual board quest loop
 local questId, autoQuest = "KillForestBrawler", false
 task.spawn(function()
 	local nextTry = 0
@@ -1027,7 +1117,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- Rest of hub (chests, farm, parry, skills, weapons, talents, etc.)
+-- Rest of hub
 -- ============================================================
 local chestOn = false
 task.spawn(function()
@@ -1542,7 +1632,6 @@ task.delay(0.5, function()
 	local tVis    = window:AddTab("Visuals")
 	local tCred   = window:AddTab("Credits")
 
-	-- Story Quests tab
 	local sStory = tStory:Section("Auto Story")
 	sStory:Label("Runs StarterQuest → StarterWeapon → ActivateNen → WaysOfNen in order.")
 	C.autoStory = sStory:Toggle({Text="Auto Story", Description="StarterQuest → StarterWeapon → ActivateNen → WaysOfNen", Default=false, Callback=function(v) autoStory = v end})
@@ -1573,7 +1662,6 @@ task.delay(0.5, function()
 		end})
 	end
 
-	-- Board Quests tab
 	local sBoardSel = tBoard:Section("Storyline Board Status")
 	sBoardSel:Label("Board states from SB_<BoardId>. Auto Storyline lives on Farm tab.")
 	for _, b in ipairs(STORYLINE_BOARDS) do
@@ -1600,7 +1688,6 @@ task.delay(0.5, function()
 	sBoardQuest:TextBox({Text="Custom Quest ID", Placeholder="e.g. KillMoleRat", Callback=function(v) if #v>0 then questId=v end end})
 	C.autoQuest = sBoardQuest:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
 
-	-- Progression tab
 	local s3 = tProg:Section("Utility")
 	C.meditate = s3:Toggle({Text="Auto Meditate", Description="Sits at the nearest meditation spot and auto-answers prompts.", Default=false, Callback=function(v) medOn=v end})
 	s3:Button({Text="AFK Chamber", Callback=function()
@@ -1621,7 +1708,6 @@ task.delay(0.5, function()
 		else notify("No pending talent choice") end
 	end})
 
-	-- Combat tab
 	local sCombat = tCombat:Section("Combat")
 	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
 	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
@@ -1651,7 +1737,6 @@ task.delay(0.5, function()
 	end})
 	C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
 
-	-- Farm tab
 	local s4 = tFarm:Section("Auto Farm")
 	C.farmTarget = s4:Dropdown({
 		Text="Target",
@@ -1700,7 +1785,6 @@ task.delay(0.5, function()
 	C.mine = s4d:Toggle({Text="Auto Mine", Description="Hops ore nodes and swings. Needs a pickaxe equipped.", Default=false, Callback=function(v) mineOn=v end})
 	C.fish = s4d:Toggle({Text="Auto Fish", Description="Casts, waits for the bite, reels in. Needs a rod equipped.", Default=false, Callback=function(v) fishOn=v end})
 
-	-- Movement tab
 	local s5 = tMove:Section("Movement")
 	C.noclip = s5:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
 	C.fly = s5:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
@@ -1737,7 +1821,6 @@ task.delay(0.5, function()
 		pcall(function() TeleportService:Teleport(game.PlaceId, lp) end)
 	end})
 
-	-- Visuals tab
 	local s6 = tVis:Section("ESP")
 	C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
 	C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
@@ -1745,7 +1828,6 @@ task.delay(0.5, function()
 	C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
 	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
 
-	-- Credits tab
 	local s7 = tCred:Section("Credits")
 	s7:Label("Credits: Zentynal Hub")
 	s7:Label("https://discord.gg/qrRjkjeBn5")
@@ -1773,4 +1855,4 @@ local function destroy()
 	pcall(function() if window.Destroy then window:Destroy() end end)
 end
 ENV.ZentynalHub = {Destroy = destroy, Window = window}
-print("[Zentynal] hub loaded v6 (complete quest system)")
+print("[Zentynal] hub loaded v7 (StarterQuest stage 2 fixed)")
