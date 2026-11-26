@@ -1,4 +1,4 @@
--- Zentynal Hub (Standalone Refactor)
+-- YourNenHub (Standalone Refactor)
 -- Full Beyond Nen cheat, free of Mythios security.
 
 local Players = game:GetService("Players")
@@ -13,15 +13,15 @@ local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
-ENV.Zentynal Hub = ENV.Zentynal Hub or nil
-if ENV.Zentynal Hub and ENV.Zentynal Hub.Destroy then pcall(ENV.Zentynal Hub.Destroy) end
+ENV.YourNenHub = ENV.YourNenHub or nil
+if ENV.YourNenHub and ENV.YourNenHub.Destroy then pcall(ENV.YourNenHub.Destroy) end
 
 -- Clean up old GUIs
 task.defer(function()
 	local ok, hui = pcall(function() return gethui() end)
 	if not (ok and hui) then return end
 	for _, d in ipairs(hui:GetChildren()) do
-		if d:IsA("ScreenGui") and (d.Name:sub(1, 4) == "PLUI" or d.Name == "Zentynal Hub") then 
+		if d:IsA("ScreenGui") and (d.Name:sub(1, 4) == "PLUI" or d.Name == "YourNenHub") then 
 			pcall(function() d:Destroy() end) 
 		end
 	end
@@ -76,16 +76,16 @@ do
 	if isLibSource(res) then
 		src = res
 		if isFn(writefile) then 
-			pcall(makefolder, "Zentynal Hub")
-			pcall(writefile, "Zentynal Hub/lib.lua", res) 
+			pcall(makefolder, "YourNenHub")
+			pcall(writefile, "YourNenHub/lib.lua", res) 
 		end
-	elseif isFn(isfile) and isFn(readfile) and isfile("Zentynal Hub/lib.lua") then
-		local cached = readfile("Zentynal Hub/lib.lua")
+	elseif isFn(isfile) and isFn(readfile) and isfile("YourNenHub/lib.lua") then
+		local cached = readfile("YourNenHub/lib.lua")
 		if isLibSource(cached) then src = cached end
 	end
 	
 	if src then
-		local fn = loadstring(src, "@Zentynal Hub")
+		local fn = loadstring(src, "@YourNenHub")
 		if isFn(fn) then
 			local ok2, l = pcall(fn)
 			if ok2 and type(l) == "table" and isFn(l.CreateWindow) then lib = l end
@@ -94,13 +94,13 @@ do
 end
 
 if not lib then
-	error("[Zentynal Hub] UI library failed to load.")
+	error("[YourNenHub] UI library failed to load.")
 end
 
 -- Rebrand the window
 local window = lib:CreateWindow({
-	Title = "Zentynal Hub", Subtitle = "Beyond Nen",
-	ToggleKey = Enum.KeyCode.RightShift, Name = "Zentynal Hub",
+	Title = "YourNenHub", Subtitle = "Beyond Nen",
+	ToggleKey = Enum.KeyCode.RightShift, Name = "YourNenHub",
 })
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
@@ -311,7 +311,6 @@ end))
 local C = {}
 local farmOn, farmTarget, auraOn, dead = false, "Forest Brawler", false, false
 
--- Mob names
 local function mobNames()
 	local players = {}
 	for _, p in pairs(game.Players:GetPlayers()) do players[p.Name] = true end
@@ -1270,7 +1269,7 @@ end)
 local sniperOn = false
 local neededNodes
 do
-	local SNIPER_DIR = "Zentynal Hub"
+	local SNIPER_DIR = "YourNenHub"
 	local function sniperSeenPath() return SNIPER_DIR .. "/node_sniper_seen.json" end
 	local function sniperSeenLoad()
 		if isFn(isfile) and isfile(sniperSeenPath()) then
@@ -1793,6 +1792,113 @@ task.spawn(function()
 end)
 end
 
+-- Config System (Missing previously, added here)
+local CFG_DIR = "YourNenHub"
+local CFG_LAST = CFG_DIR .. "/_last.txt"
+local curConfig = "default"
+local function cfgPath(n) return CFG_DIR .. "/" .. n .. ".json" end
+local function cfgNameOk(n)
+	return type(n) == "string" and n ~= "" and not n:find("[/\\]") and n ~= "_last"
+end
+local function listConfigs()
+	local out = {}
+	if isFn(listfiles) and isFn(isfolder) and isfolder(CFG_DIR) then
+		for _, p in pairs(listfiles(CFG_DIR)) do
+			local n = p:gsub("\\", "/"):match("([^/]+)%.json$")
+			if n and n ~= "_last" then out[#out + 1] = n end
+		end
+	end
+	table.sort(out)
+	if #out == 0 then out = {"default"} end
+	return out
+end
+local function markLast(n)
+	if isFn(makefolder) then pcall(makefolder, CFG_DIR) end
+	if isFn(writefile) then pcall(writefile, CFG_LAST, n) end
+end
+local function saveConfig(name)
+	name = cfgNameOk(name) and name or curConfig
+	local data = {
+		farmOn=farmOn, farmTarget=farmTarget, farmPos=farmPos, farmDist=farmDist, farmYOff=farmYOff, farmFloat=farmFloat,
+		auraOn=auraOn, parryOn=parryOn, parryRange=parryRange, parryDelay=parryDelay,
+		skillOn=skillOn, gripOn=gripOn, autoWeapon=autoWeapon, weaponChoice=weaponChoice,
+		autoQuest=autoQuest, questId=questId, chestOn=chestOn, alertOn=alertOn,
+		wsOn=wsOn, wsVal=wsVal, talentOn=talentOn, talentReroll=talentReroll, talentMin=talentMin,
+		espOn=espOn, mineOn=mineOn, fishOn=fishOn, medOn=medOn, antiAFK=(afkConn ~= nil),
+		autoStatsOn=autoStatsOn, statChoice=statChoice, nodeMasterOn=nodeMasterOn, sniperOn=sniperOn,
+		minePri1=minePri1, minePri2=minePri2, autoSellOn=autoSellOn,
+		bossOn=bossOn, bossEnabled=bossEnabled,
+		autoExamOn=autoExamOn, examFightMobs=examFightMobs, examSpeed=examSpeed,
+	}
+	local ok, j = pcall(function() return HttpService:JSONEncode(data) end)
+	if ok and isFn(writefile) then
+		if isFn(makefolder) then pcall(makefolder, CFG_DIR) end
+		writefile(cfgPath(name), j)
+		curConfig = name
+		markLast(name)
+	end
+end
+local CFG_MAP = {
+	farmOn="farm", farmTarget="farmTarget", farmPos="farmPos", farmDist="farmDist",
+	farmYOff="farmYOff", farmFloat="farmFloat", auraOn="aura", parryOn="parry",
+	parryRange="parryRange", skillOn="skills", gripOn="grip", autoWeapon="autoWeapon",
+	autoQuest="autoQuest", chestOn="chests", alertOn="alert", wsOn="ws", wsVal="wsVal",
+	talentOn="talentAuto", talentReroll="talentReroll", talentMin="talentMin",
+	mineOn="mine", fishOn="fish", medOn="meditate", antiAFK="antiAFK",
+	autoStatsOn="autoStats", statChoice="statChoice", nodeMasterOn="nodeMaster", sniperOn="sniper",
+	minePri1="minePri1", minePri2="minePri2", autoSellOn="autoSell", bossOn="boss",
+	autoExamOn="exam", examFightMobs="examFight", examSpeed="examSpeed",
+}
+local function loadConfig(name)
+	name = cfgNameOk(name) and name or curConfig
+	if not (isFn(isfile) and isfile(cfgPath(name))) then notify("No config: " .. name) return end
+	local ok, d = pcall(function() return isFn(readfile) and HttpService:JSONDecode(readfile(cfgPath(name))) end)
+	if not (ok and type(d) == "table") then return end
+	curConfig = name
+	markLast(name)
+	task.delay(0.8, function() -- apply after the deferred UI build exists
+		for k, v in pairs(d) do
+			if k == "espOn" and type(v) == "table" then
+				for n, on in pairs(v) do
+					local c = C["esp_" .. n]
+					if c then c:Set(on) else espOn[n] = on end
+				end
+			elseif k == "bossEnabled" and type(v) == "table" then
+				for n, on in pairs(v) do
+					local c = C["boss_" .. n]
+					if c then c:Set(on) else bossEnabled[n] = on end
+				end
+			elseif k == "parryDelay" then
+				parryDelay = v
+				if C.parryDelay then C.parryDelay:Set(v * 100) end
+			elseif k == "questId" then
+				questId = v
+				if C.quest and QUEST_BY_ID[v] then C.quest:Set(QUEST_BY_ID[v]) end
+			elseif k == "weaponChoice" then
+				weaponChoice = v
+				if C.weapon and C.weaponByName then
+					for lbl, w in pairs(C.weaponByName) do if w.name == v then C.weapon:Set(lbl) break end end
+				end
+			else
+				local ck = CFG_MAP[k]
+				if ck and C[ck] then C[ck]:Set(v) end
+			end
+		end
+		notify("Config loaded: " .. name)
+	end)
+end
+task.delay(1, function()
+	local last = isFn(isfile) and isfile(CFG_LAST) and isFn(readfile) and readfile(CFG_LAST) or nil
+	if cfgNameOk(last) and isfile(cfgPath(last)) then
+		loadConfig(last)
+	elseif isfile(cfgPath("default")) then
+		loadConfig("default")
+	end
+end)
+if queueTP then
+	pcall(function() queueTP('local s; if type(isfile)=="function" then for _,p in pairs({"QA Scripts/YourNenHub.lua","YourNenHub.lua"}) do if isfile(p) then s=readfile(p) break end end end; if s then loadstring(s)() end') end)
+end
+
 -- ESP
 local espOn = {players=false, mobs=false, chests=false, bosses=false}
 local espObjs = {}
@@ -2220,11 +2326,11 @@ task.delay(0.5, function()
 	end})
 	s8:Label("The last used config auto-loads on launch and after teleports.")
 	s8:Button({Text="Unload Hub", Danger=true, Callback=function()
-		if ENV.Zentynal Hub then ENV.Zentynal Hub.Destroy() end
+		if ENV.YourNenHub then ENV.YourNenHub.Destroy() end
 	end})
 
 	local s7 = tSet:Section("Credits")
-	s7:Label("Zentynal Hub — Refactored")
+	s7:Label("YourNenHub — Refactored")
 	s7:Label("Based on MythiOs UI")
 	s7:Button({Text="Copy Discord Link", Callback=function()
 		if clipSet then clipSet("https://mythios.online/discord") notify("Discord link copied") end
@@ -2242,7 +2348,7 @@ local function destroy()
 	setAntiAFK(false); clearESP(); setFB(false)
 	pcall(function() if window.Destroy then window:Destroy() end end)
 end
-ENV.Zentynal Hub = {Destroy = destroy, Window = window}
+ENV.YourNenHub = {Destroy = destroy, Window = window}
 ENV.BNH = {
 	set = function(k, v)
 		local map = {autoExamOn=function() autoExamOn=v end, farmOn=function() farmOn=v auraOn=v end,
@@ -2262,5 +2368,5 @@ ENV.BNH = {
 		if f then return f(...) end
 	end,
 }
-print("[Zentynal Hub] hub loaded")
+print("[YourNenHub] hub loaded")
 end
