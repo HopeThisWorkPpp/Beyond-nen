@@ -94,7 +94,18 @@ do
 end
 
 if not lib then
-	error("[ZentynalHub] UI library failed to load (server unreachable or served non-lib content)")
+    local gui = game:GetService("CoreGui")
+    local sg = Instance.new("ScreenGui", gui)
+    sg.Name = "ZNT_LibErr"
+    local lbl = Instance.new("TextLabel", sg)
+    lbl.Size = UDim2.new(1, 0, 0, 40)
+    lbl.Position = UDim2.new(0, 0, 0.5, 0)
+    lbl.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
+    lbl.TextColor3 = Color3.fromRGB(255, 80, 80)
+    lbl.Text = "[ZentynalHub] UI lib failed — check your internet or the lib URL"
+    lbl.TextScaled = true
+    task.delay(6, function() pcall(function() sg:Destroy() end) end)
+    return  -- <-- graceful exit, no crash
 end
 
 local window = lib:CreateWindow({
