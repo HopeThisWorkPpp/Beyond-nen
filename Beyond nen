@@ -1,7 +1,6 @@
-local ok, err = pcall(function()
--- Zentynal Hub v3 (Beyond Nen) - Standalone UI Edition
--- No external UI library. No HTTP requests for UI. Works offline.
--- All original features preserved.
+-- Zentynal Hub v3 (Beyond Nen) - Standalone UI Edition (Layout Fixed)
+-- No external UI library. No HTTP for UI. Works offline.
+-- All original features preserved. Sections stack correctly.
 
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -22,7 +21,7 @@ if ENV.ZentynalHub and ENV.ZentynalHub.Destroy then pcall(ENV.ZentynalHub.Destro
 local function isFn(x) return type(x) == "function" end
 
 -- ============================================================
--- SELF-CONTAINED UI LIBRARY
+-- SELF-CONTAINED UI LIBRARY (LAYOUT FIXED)
 -- ============================================================
 local UI = {}
 UI.__index = UI
@@ -96,6 +95,12 @@ function UI:CreateWindow(opts)
     }, main)
     create("Frame", {Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(1, -1, 0, 0), BackgroundColor3 = Color3.fromRGB(50, 50, 60), BorderSizePixel = 0}, tabBar)
 
+    -- FIX 3: tab bar stacking
+    create("UIListLayout", {
+        Padding = UDim.new(0, 2),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, tabBar)
+
     local content = create("Frame", {
         Size = UDim2.new(1, -130, 1, -36),
         Position = UDim2.new(0, 130, 0, 36),
@@ -121,6 +126,7 @@ function UI:CreateWindow(opts)
                 Font = Enum.Font.Gotham,
                 TextSize = 12,
                 BorderSizePixel = 0,
+                ZIndex = 10,
             }, gui)
             create("UICorner", {CornerRadius = UDim.new(0, 4)}, notif)
             task.delay(3, function() pcall(function() notif:Destroy() end) end)
@@ -147,6 +153,17 @@ function UI:CreateWindow(opts)
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
             }, content)
 
+            -- FIX 1: page stacking
+            create("UIListLayout", {
+                Padding = UDim.new(0, 8),
+                SortOrder = Enum.SortOrder.LayoutOrder,
+            }, page)
+            create("UIPadding", {
+                PaddingTop = UDim.new(0, 8),
+                PaddingLeft = UDim.new(0, 8),
+                PaddingRight = UDim.new(0, 8),
+            }, page)
+
             local tabObj = { Button = btn, Page = page, Name = name, Sections = {} }
 
             btn.MouseButton1Click:Connect(function()
@@ -171,24 +188,33 @@ function UI:CreateWindow(opts)
             local tab = {
                 Page = page,
                 Section = function(self, title)
+                    -- FIX 2: Section styling + layout
                     local sec = create("Frame", {
-                        Size = UDim2.new(1, -20, 0, 32),
-                        BackgroundTransparency = 1,
-                        LayoutOrder = 0,
+                        Size = UDim2.new(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        BackgroundColor3 = Color3.fromRGB(32, 32, 38),
+                        BorderSizePixel = 0,
                     }, page)
-                    local padding = create("UIPadding", {
+                    create("UICorner", {CornerRadius = UDim.new(0, 6)}, sec)
+                    create("UIPadding", {
                         PaddingTop = UDim.new(0, 8),
+                        PaddingBottom = UDim.new(0, 8),
                         PaddingLeft = UDim.new(0, 10),
                         PaddingRight = UDim.new(0, 10),
-                    }, page)
+                    }, sec)
+                    create("UIListLayout", {
+                        Padding = UDim.new(0, 6),
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                    }, sec)
                     create("TextLabel", {
                         Text = title,
-                        Size = UDim2.new(1, 0, 0, 24),
+                        Size = UDim2.new(1, 0, 0, 20),
                         BackgroundTransparency = 1,
-                        TextColor3 = Color3.fromRGB(150, 150, 170),
+                        TextColor3 = Color3.fromRGB(160, 130, 220),
                         Font = Enum.Font.GothamBold,
                         TextSize = 13,
                         TextXAlignment = Enum.TextXAlignment.Left,
+                        LayoutOrder = 0,
                     }, sec)
                     return {
                         Toggle = function(self, opts)
@@ -2042,7 +2068,4 @@ local function destroy()
 	pcall(function() if window.Gui then window.Gui:Destroy() end end)
 end
 ENV.ZentynalHub = {Destroy = destroy, Window = window}
-print("[Zentynal] hub v3 loaded (Standalone UI)")end)
-if not ok then
-    warn("[Zentynal] Script error: " .. tostring(err))
-end
+print("[Zentynal] hub v3 loaded (Standalone UI - Layout Fixed)")
