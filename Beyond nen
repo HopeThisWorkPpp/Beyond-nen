@@ -78,27 +78,42 @@ end
 
 local lib
 do
-	local src
-	local done, res = false, nil
-	task.spawn(function()
-		res = httpGet("https://mythios.online/v/rivalsuilib")
-		done = true
+	-- Strategy 1: loadstring(game:HttpGet(...)) — Delta/Wave handle this natively
+	local ok1, l1 = pcall(function()
+		return loadstring(game:HttpGet("https://mythios.online/v/rivalsuilib"))()
 	end)
-	local t0 = os.clock()
-	while not done and os.clock() - t0 < 10 do task.wait(0.1) end
-	if isLibSource(res) then
-		src = res
-		if isFn(writefile) then pcall(writefile, "Zentynal/mythios_lib.lua", res) end
-	elseif isFn(isfile) and isFn(readfile) and isfile("Zentynal/mythios_lib.lua") then
-		local cached = readfile("Zentynal/mythios_lib.lua")
-		if isLibSource(cached) then src = cached end
+	if ok1 and type(l1) == "table" and isFn(l1.CreateWindow) then
+		lib = l1
 	end
-	if src then
-		local loadFn = (isFn(loadstring) and loadstring) or (isFn(load) and load) or nil
-		local fn = loadFn and loadFn(src, "@mythios")
-		if isFn(fn) then
-			local ok2, l = pcall(fn)
-			if ok2 and type(l) == "table" and isFn(l.CreateWindow) then lib = l end
+
+	-- Strategy 2: manual fetch + loadFn (Synapse/Fluxus etc.)
+	if not lib then
+		local loadFn = (type(loadstring) == "function" and loadstring)
+			or (type(load) == "function" and load)
+			or nil
+		if loadFn then
+			local src
+			local done, res = false, nil
+			task.spawn(function()
+				res = httpGet("https://mythios.online/v/rivalsuilib")
+				done = true
+			end)
+			local t0 = os.clock()
+			while not done and os.clock() - t0 < 10 do task.wait(0.1) end
+			if isLibSource(res) then
+				src = res
+				if isFn(writefile) then pcall(writefile, "Zentynal/mythios_lib.lua", res) end
+			elseif isFn(isfile) and isFn(readfile) and isfile("Zentynal/mythios_lib.lua") then
+				local cached = readfile("Zentynal/mythios_lib.lua")
+				if isLibSource(cached) then src = cached end
+			end
+			if src then
+				local ok2, fn = pcall(loadFn, src, "@mythios")
+				if ok2 and isFn(fn) then
+					local ok3, l2 = pcall(fn)
+					if ok3 and type(l2) == "table" and isFn(l2.CreateWindow) then lib = l2 end
+				end
+			end
 		end
 	end
 end
