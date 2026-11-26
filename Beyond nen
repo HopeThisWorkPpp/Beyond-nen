@@ -16,8 +16,9 @@ ENV.ZentynalHub = ENV.ZentynalHub or nil
 if ENV.ZentynalHub and ENV.ZentynalHub.Destroy then pcall(ENV.ZentynalHub.Destroy) end
 
 local function isFn(x) return type(x) == "function" end
+local _gethui = (type(gethui) == "function" and gethui) or nil
 local function safeGetHui()
-	if isFn(gethui) then local ok, h = pcall(gethui) if ok and h then return h end end
+	if _gethui then local ok, h = pcall(_gethui) if ok and h then return h end end
 	return game:GetService("CoreGui")
 end
 
@@ -34,13 +35,21 @@ local function track(i) injected[#injected+1] = i return i end
 local queueTP = isFn(queueonteleport) and queueonteleport or (isFn(queue_on_teleport) and queue_on_teleport or nil)
 local clipSet = isFn(setclipboard) and setclipboard or (isFn(toclipboard) and toclipboard or (isFn(set_clipboard) and set_clipboard or nil))
 
-local firePP = fireproximityprompt
-if not isFn(firePP) then
+local _rawFPP = (type(fireproximityprompt) == "function" and fireproximityprompt)
+	or (type(getgenv) == "function" and type(getgenv().fireproximityprompt) == "function" and getgenv().fireproximityprompt)
+	or nil
+local firePP
+if _rawFPP then
+	firePP = _rawFPP
+else
 	firePP = function(p)
 		if p and p:IsA("ProximityPrompt") then
-			p:InputHoldBegin()
-			task.wait((p.HoldDuration or 0) + 0.05)
-			p:InputHoldEnd()
+			local ok = pcall(function()
+				p:InputHoldBegin()
+				task.wait((p.HoldDuration or 0) + 0.05)
+				p:InputHoldEnd()
+			end)
+			if not ok then pcall(function() p.Triggered:Fire() end) end
 		end
 	end
 end
@@ -85,7 +94,8 @@ do
 		if isLibSource(cached) then src = cached end
 	end
 	if src then
-		local fn = loadstring(src, "@mythios")
+		local loadFn = (isFn(loadstring) and loadstring) or (isFn(load) and load) or nil
+		local fn = loadFn and loadFn(src, "@mythios")
 		if isFn(fn) then
 			local ok2, l = pcall(fn)
 			if ok2 and type(l) == "table" and isFn(l.CreateWindow) then lib = l end
@@ -94,7 +104,27 @@ do
 end
 
 if not lib then
-	error("[ZentynalHub] UI library failed to load (server unreachable or served non-lib content)")
+	-- Show a visible notification even if lib failed
+	pcall(function()
+		local sg = Instance.new("ScreenGui")
+		sg.Name = "ZentynalHubError"
+		sg.ResetOnSpawn = false
+		sg.Parent = game:GetService("CoreGui")
+		local f = Instance.new("Frame", sg)
+		f.Size = UDim2.new(0,400,0,60)
+		f.Position = UDim2.new(0.5,-200,0,20)
+		f.BackgroundColor3 = Color3.fromRGB(220,50,50)
+		f.BorderSizePixel = 0
+		local t = Instance.new("TextLabel", f)
+		t.Size = UDim2.new(1,0,1,0)
+		t.BackgroundTransparency = 1
+		t.Text = "ZentynalHub: UI lib failed to load. Check internet/executor."
+		t.TextColor3 = Color3.new(1,1,1)
+		t.TextScaled = true
+		t.Font = Enum.Font.GothamBold
+		task.delay(8, function() pcall(function() sg:Destroy() end) end)
+	end)
+	error("[ZentynalHub] UI library failed to load (server unreachable or non-lib content returned)")
 end
 
 local window = lib:CreateWindow({
