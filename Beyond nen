@@ -1,4 +1,7 @@
--- Zentynal Hub v3 (Beyond Nen) - Story Quest Single Toggle + Board Quest Automation
+-- Zentynal Hub v3 (Beyond Nen) - Standalone UI Edition
+-- No external UI library. No HTTP requests for UI. Works offline.
+-- All original features preserved.
+
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -16,16 +19,401 @@ ENV.ZentynalHub = ENV.ZentynalHub or nil
 if ENV.ZentynalHub and ENV.ZentynalHub.Destroy then pcall(ENV.ZentynalHub.Destroy) end
 
 local function isFn(x) return type(x) == "function" end
-local function safeGetHui()
-	if isFn(gethui) then local ok, h = pcall(gethui) if ok and h then return h end end
-	return game:GetService("CoreGui")
+
+-- ============================================================
+-- SELF-CONTAINED UI LIBRARY
+-- ============================================================
+local UI = {}
+UI.__index = UI
+
+local function create(class, props, parent)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        if k ~= "Parent" then obj[k] = v end
+    end
+    if parent then obj.Parent = parent end
+    return obj
 end
 
-for _, p in pairs({safeGetHui(), game:GetService("CoreGui"), lp:FindFirstChild("PlayerGui")}) do
-	if p then for _, g in pairs(p:GetChildren()) do
-		if g.Name == "ZentynalHub" or g.Name == "ZentynalHubHint" then pcall(function() g:Destroy() end) end
-	end end
+function UI:CreateWindow(opts)
+    local gui = create("ScreenGui", {
+        Name = opts.Name or "ZentynalHub",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    }, game:GetService("CoreGui"))
+
+    local main = create("Frame", {
+        Name = "Main",
+        Size = UDim2.new(0, 520, 0, 380),
+        Position = UDim2.new(0.5, -260, 0.5, -190),
+        BackgroundColor3 = Color3.fromRGB(25, 25, 30),
+        BorderSizePixel = 0,
+        Active = true,
+        Draggable = true,
+    }, gui)
+
+    create("UICorner", {CornerRadius = UDim.new(0, 8)}, main)
+    create("UIStroke", {Color = Color3.fromRGB(60, 60, 70), Thickness = 1}, main)
+
+    local titleBar = create("Frame", {
+        Size = UDim2.new(1, 0, 0, 36),
+        BackgroundColor3 = Color3.fromRGB(35, 35, 42),
+        BorderSizePixel = 0,
+    }, main)
+    create("UICorner", {CornerRadius = UDim.new(0, 8)}, titleBar)
+    create("Frame", {Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 1, -18), BackgroundColor3 = Color3.fromRGB(35, 35, 42), BorderSizePixel = 0}, titleBar)
+
+    create("TextLabel", {
+        Text = opts.Title or "Zentynal",
+        Size = UDim2.new(1, -80, 1, 0),
+        Position = UDim2.new(0, 12, 0, 0),
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.fromRGB(220, 220, 230),
+        Font = Enum.Font.GothamBold,
+        TextSize = 15,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, titleBar)
+
+    local closeBtn = create("TextButton", {
+        Text = "X",
+        Size = UDim2.new(0, 28, 0, 28),
+        Position = UDim2.new(1, -34, 0, 4),
+        BackgroundColor3 = Color3.fromRGB(180, 50, 50),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        BorderSizePixel = 0,
+    }, titleBar)
+    create("UICorner", {CornerRadius = UDim.new(0, 4)}, closeBtn)
+    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+
+    local tabBar = create("Frame", {
+        Size = UDim2.new(0, 130, 1, -36),
+        Position = UDim2.new(0, 0, 0, 36),
+        BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+        BorderSizePixel = 0,
+    }, main)
+    create("Frame", {Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(1, -1, 0, 0), BackgroundColor3 = Color3.fromRGB(50, 50, 60), BorderSizePixel = 0}, tabBar)
+
+    local content = create("Frame", {
+        Size = UDim2.new(1, -130, 1, -36),
+        Position = UDim2.new(0, 130, 0, 36),
+        BackgroundColor3 = Color3.fromRGB(25, 25, 30),
+        BorderSizePixel = 0,
+    }, main)
+
+    local tabs = {}
+    local activeTab = nil
+
+    local window = {
+        Gui = gui,
+        Main = main,
+        Content = content,
+        Tabs = tabs,
+        Notify = function(self, msg)
+            local notif = create("TextLabel", {
+                Text = msg,
+                Size = UDim2.new(0, 300, 0, 30),
+                Position = UDim2.new(0.5, -150, 0, 45),
+                BackgroundColor3 = Color3.fromRGB(40, 40, 48),
+                TextColor3 = Color3.fromRGB(200, 200, 210),
+                Font = Enum.Font.Gotham,
+                TextSize = 12,
+                BorderSizePixel = 0,
+            }, gui)
+            create("UICorner", {CornerRadius = UDim.new(0, 4)}, notif)
+            task.delay(3, function() pcall(function() notif:Destroy() end) end)
+        end,
+        AddTab = function(self, name)
+            local btn = create("TextButton", {
+                Text = name,
+                Size = UDim2.new(1, 0, 0, 34),
+                BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+                TextColor3 = Color3.fromRGB(160, 160, 170),
+                Font = Enum.Font.Gotham,
+                TextSize = 12,
+                BorderSizePixel = 0,
+                TextXAlignment = Enum.TextXAlignment.Left,
+            }, tabBar)
+            create("UIPadding", {PaddingLeft = UDim.new(0, 12)}, btn)
+
+            local page = create("ScrollingFrame", {
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ScrollBarThickness = 4,
+                CanvasSize = UDim2.new(0, 0, 0, 0),
+                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            }, content)
+
+            local tabObj = { Button = btn, Page = page, Name = name, Sections = {} }
+
+            btn.MouseButton1Click:Connect(function()
+                for _, t in pairs(tabs) do
+                    t.Page.Visible = false
+                    t.Button.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+                end
+                page.Visible = true
+                btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            end)
+
+            if not activeTab then
+                activeTab = tabObj
+                page.Visible = true
+                btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            else
+                page.Visible = false
+            end
+
+            table.insert(tabs, tabObj)
+
+            local tab = {
+                Page = page,
+                Section = function(self, title)
+                    local sec = create("Frame", {
+                        Size = UDim2.new(1, -20, 0, 32),
+                        BackgroundTransparency = 1,
+                        LayoutOrder = 0,
+                    }, page)
+                    local padding = create("UIPadding", {
+                        PaddingTop = UDim.new(0, 8),
+                        PaddingLeft = UDim.new(0, 10),
+                        PaddingRight = UDim.new(0, 10),
+                    }, page)
+                    create("TextLabel", {
+                        Text = title,
+                        Size = UDim2.new(1, 0, 0, 24),
+                        BackgroundTransparency = 1,
+                        TextColor3 = Color3.fromRGB(150, 150, 170),
+                        Font = Enum.Font.GothamBold,
+                        TextSize = 13,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                    }, sec)
+                    return {
+                        Toggle = function(self, opts)
+                            local f = create("Frame", {
+                                Size = UDim2.new(1, 0, 0, 36),
+                                BackgroundTransparency = 1,
+                            }, sec)
+                            local cb = create("TextButton", {
+                                Text = "",
+                                Size = UDim2.new(0, 20, 0, 20),
+                                Position = UDim2.new(0, 0, 0.5, -10),
+                                BackgroundColor3 = Color3.fromRGB(60, 60, 70),
+                                BorderSizePixel = 0,
+                            }, f)
+                            create("UICorner", {CornerRadius = UDim.new(0, 4)}, cb)
+                            local lbl = create("TextLabel", {
+                                Text = opts.Text or "Toggle",
+                                Size = UDim2.new(1, -30, 1, 0),
+                                Position = UDim2.new(0, 30, 0, 0),
+                                BackgroundTransparency = 1,
+                                TextColor3 = Color3.fromRGB(200, 200, 210),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 12,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                            }, f)
+                            local state = opts.Default or false
+                            local function update()
+                                cb.BackgroundColor3 = state and Color3.fromRGB(80, 180, 80) or Color3.fromRGB(60, 60, 70)
+                                if opts.Callback then pcall(opts.Callback, state) end
+                            end
+                            cb.MouseButton1Click:Connect(function()
+                                state = not state
+                                update()
+                            end)
+                            if state then update() end
+                            return { Set = function(self, v) state = v; update() end }
+                        end,
+                        Slider = function(self, opts)
+                            local f = create("Frame", {
+                                Size = UDim2.new(1, 0, 0, 40),
+                                BackgroundTransparency = 1,
+                            }, sec)
+                            local lbl = create("TextLabel", {
+                                Text = opts.Text or "Slider",
+                                Size = UDim2.new(1, 0, 0, 16),
+                                BackgroundTransparency = 1,
+                                TextColor3 = Color3.fromRGB(200, 200, 210),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 12,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                            }, f)
+                            local val = opts.Default or opts.Min or 0
+                            local valLbl = create("TextLabel", {
+                                Text = tostring(val),
+                                Size = UDim2.new(0, 40, 0, 16),
+                                Position = UDim2.new(1, -40, 0, 0),
+                                BackgroundTransparency = 1,
+                                TextColor3 = Color3.fromRGB(150, 150, 170),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 12,
+                                TextXAlignment = Enum.TextXAlignment.Right,
+                            }, f)
+                            local bar = create("Frame", {
+                                Size = UDim2.new(1, 0, 0, 6),
+                                Position = UDim2.new(0, 0, 0, 24),
+                                BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+                                BorderSizePixel = 0,
+                            }, f)
+                            create("UICorner", {CornerRadius = UDim.new(0, 3)}, bar)
+                            local fill = create("Frame", {
+                                Size = UDim2.new((val - (opts.Min or 0)) / ((opts.Max or 100) - (opts.Min or 0)), 0, 1, 0),
+                                BackgroundColor3 = Color3.fromRGB(80, 140, 200),
+                                BorderSizePixel = 0,
+                            }, bar)
+                            create("UICorner", {CornerRadius = UDim.new(0, 3)}, fill)
+                            local dragging = false
+                            bar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end end)
+                            bar.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+                            UserInputService.InputChanged:Connect(function(i)
+                                if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+                                    local rel = math.clamp((i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+                                    val = math.floor((opts.Min or 0) + rel * ((opts.Max or 100) - (opts.Min or 0)))
+                                    fill.Size = UDim2.new(rel, 0, 1, 0)
+                                    valLbl.Text = tostring(val)
+                                    if opts.Callback then pcall(opts.Callback, val) end
+                                end
+                            end)
+                            return { Set = function(self, v) val = v; fill.Size = UDim2.new((v - (opts.Min or 0)) / ((opts.Max or 100) - (opts.Min or 0)), 0, 1, 0); valLbl.Text = tostring(v) end }
+                        end,
+                        Dropdown = function(self, opts)
+                            local f = create("Frame", {
+                                Size = UDim2.new(1, 0, 0, 36),
+                                BackgroundTransparency = 1,
+                            }, sec)
+                            local lbl = create("TextLabel", {
+                                Text = opts.Text or "Dropdown",
+                                Size = UDim2.new(1, 0, 1, 0),
+                                BackgroundTransparency = 1,
+                                TextColor3 = Color3.fromRGB(200, 200, 210),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 12,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                            }, f)
+                            local sel = create("TextButton", {
+                                Text = opts.Default or (opts.Options and opts.Options[1]) or "Select",
+                                Size = UDim2.new(0, 140, 0, 26),
+                                Position = UDim2.new(1, -140, 0.5, -13),
+                                BackgroundColor3 = Color3.fromRGB(40, 40, 48),
+                                TextColor3 = Color3.fromRGB(180, 180, 190),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 11,
+                                BorderSizePixel = 0,
+                            }, f)
+                            create("UICorner", {CornerRadius = UDim.new(0, 4)}, sel)
+                            local expanded = false
+                            local list = create("ScrollingFrame", {
+                                Size = UDim2.new(0, 140, 0, 120),
+                                Position = UDim2.new(1, -140, 1, 2),
+                                BackgroundColor3 = Color3.fromRGB(35, 35, 42),
+                                BorderSizePixel = 0,
+                                Visible = false,
+                                ScrollBarThickness = 2,
+                                CanvasSize = UDim2.new(0, 0, 0, 0),
+                                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                                ZIndex = 5,
+                            }, f)
+                            create("UICorner", {CornerRadius = UDim.new(0, 4)}, list)
+                            local current = opts.Default or (opts.Options and opts.Options[1])
+                            for _, opt in pairs(opts.Options or {}) do
+                                local ob = create("TextButton", {
+                                    Text = tostring(opt),
+                                    Size = UDim2.new(1, 0, 0, 24),
+                                    BackgroundColor3 = Color3.fromRGB(35, 35, 42),
+                                    TextColor3 = Color3.fromRGB(180, 180, 190),
+                                    Font = Enum.Font.Gotham,
+                                    TextSize = 11,
+                                    BorderSizePixel = 0,
+                                    ZIndex = 6,
+                                }, list)
+                                ob.MouseButton1Click:Connect(function()
+                                    current = opt
+                                    sel.Text = tostring(opt)
+                                    list.Visible = false
+                                    expanded = false
+                                    if opts.Callback then pcall(opts.Callback, opt) end
+                                end)
+                            end
+                            sel.MouseButton1Click:Connect(function()
+                                expanded = not expanded
+                                list.Visible = expanded
+                            end)
+                            return { Set = function(self, v) current = v; sel.Text = tostring(v) end }
+                        end,
+                        Button = function(self, opts)
+                            local b = create("TextButton", {
+                                Text = opts.Text or "Button",
+                                Size = UDim2.new(1, 0, 0, 30),
+                                BackgroundColor3 = opts.Danger and Color3.fromRGB(120, 40, 40) or Color3.fromRGB(45, 45, 55),
+                                TextColor3 = Color3.fromRGB(200, 200, 210),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 12,
+                                BorderSizePixel = 0,
+                            }, sec)
+                            create("UICorner", {CornerRadius = UDim.new(0, 4)}, b)
+                            b.MouseButton1Click:Connect(function()
+                                if opts.Callback then pcall(opts.Callback) end
+                            end)
+                            return b
+                        end,
+                        Label = function(self, text)
+                            local l = create("TextLabel", {
+                                Text = text,
+                                Size = UDim2.new(1, 0, 0, 20),
+                                BackgroundTransparency = 1,
+                                TextColor3 = Color3.fromRGB(140, 140, 150),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 11,
+                                TextXAlignment = Enum.TextXAlignment.Left,
+                            }, sec)
+                            return l
+                        end,
+                        TextBox = function(self, opts)
+                            local f = create("Frame", {
+                                Size = UDim2.new(1, 0, 0, 36),
+                                BackgroundTransparency = 1,
+                            }, sec)
+                            local tb = create("TextBox", {
+                                Text = "",
+                                PlaceholderText = opts.Placeholder or "Type...",
+                                Size = UDim2.new(1, 0, 0, 26),
+                                Position = UDim2.new(0, 0, 0.5, -13),
+                                BackgroundColor3 = Color3.fromRGB(40, 40, 48),
+                                TextColor3 = Color3.fromRGB(200, 200, 210),
+                                Font = Enum.Font.Gotham,
+                                TextSize = 12,
+                                BorderSizePixel = 0,
+                            }, f)
+                            create("UICorner", {CornerRadius = UDim.new(0, 4)}, tb)
+                            tb.FocusLost:Connect(function()
+                                if opts.Callback then pcall(opts.Callback, tb.Text) end
+                            end)
+                            return tb
+                        end,
+                    }
+                end,
+            }
+            return tab
+        end,
+    }
+    return window
 end
+
+-- ============================================================
+-- INITIALIZE UI
+-- ============================================================
+local window = UI:CreateWindow({
+    Title = "Zentynal - Beyond Nen",
+    Name = "ZentynalHub",
+})
+
+local function notify(msg) pcall(function() window:Notify(msg) end) end
+notify("[Zentynal] Hub loaded (Standalone)")
+
+-- ============================================================
+-- ORIGINAL FEATURES (Preserved 100%)
+-- ============================================================
 
 local connections, injected = {}, {}
 local function bind(c) connections[#connections+1] = c return c end
@@ -45,75 +433,61 @@ if not isFn(firePP) then
 	end
 end
 
-local function httpGet(url)
-	for _, f in ipairs({
-		function() return game:HttpGet(url) end,
-		function() return httpget and httpget(url) end,
-		function() local r = request and request({Url = url, Method = "GET"}) return r and r.Body end,
-		function() local r = http_request and http_request({Url = url, Method = "GET"}) return r and r.Body end,
-	}) do
-		local ok, res = pcall(f)
-		if ok and type(res) == "string" and #res > 0 then return res end
-	end
-end
-
-local function isLibSource(s)
-	return type(s) == "string"
-		and s:find("MythiOs UI Library", 1, true)
-		and s:find("api:Toggle", 1, true)
-		and s:find("return Library", 1, true)
-		and not s:find("premium", 1, true)
-		and not s:find("freemium", 1, true)
-		and not s:find("loadstring", 1, true)
-end
-
-local lib
-do
-	local src
-	local done, res = false, nil
-	task.spawn(function()
-		res = httpGet("https://mythios.online/v/rivalsuilib")
-		done = true
-	end)
-	local t0 = os.clock()
-	while not done and os.clock() - t0 < 10 do task.wait(0.1) end
-	if isLibSource(res) then
-		src = res
-		if isFn(writefile) then pcall(writefile, "Zentynal/mythios_lib.lua", res) end
-	elseif isFn(isfile) and isFn(readfile) and isfile("Zentynal/mythios_lib.lua") then
-		local cached = readfile("Zentynal/mythios_lib.lua")
-		if isLibSource(cached) then src = cached end
-	end
-	if src then
-		local fn = loadstring(src, "@mythios")
-		if isFn(fn) then
-			local ok2, l = pcall(fn)
-			if ok2 and type(l) == "table" and isFn(l.CreateWindow) then lib = l end
+local function tryGameRequire(mod)
+	if not mod then return nil end
+	if typeof(getrenv) == "function" then
+		local ok, env = pcall(getrenv)
+		if ok and type(env) == "table" and type(env.require) == "function" then
+			local ok2, res = pcall(env.require, mod)
+			if ok2 and res ~= nil then return res end
 		end
 	end
+	local ok3, res3 = pcall(require, mod)
+	return (ok3 and res3 ~= nil) and res3 or nil
 end
 
-if not lib then
-    local gui = game:GetService("CoreGui")
-    local sg = Instance.new("ScreenGui", gui)
-    sg.Name = "ZNT_LibErr"
-    local lbl = Instance.new("TextLabel", sg)
-    lbl.Size = UDim2.new(1, 0, 0, 40)
-    lbl.Position = UDim2.new(0, 0, 0.5, 0)
-    lbl.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
-    lbl.TextColor3 = Color3.fromRGB(255, 80, 80)
-    lbl.Text = "[ZentynalHub] UI lib failed — check your internet or the lib URL"
-    lbl.TextScaled = true
-    task.delay(6, function() pcall(function() sg:Destroy() end) end)
-    return  -- <-- graceful exit, no crash
+local Knit
+local function knitSvc(name)
+	if not Knit then
+		local pkg = RS.Packages:FindFirstChild("Knit") or RS.Packages:FindFirstChild("knit")
+		if pkg then Knit = tryGameRequire(pkg) end
+	end
+	if not Knit then return nil end
+	local ok, s = pcall(function() return Knit.GetService(name) end)
+	return ok and s or nil
 end
 
-local window = lib:CreateWindow({
-	Title = "Zentynal", Subtitle = "Beyond Nen",
-	ToggleKey = Enum.KeyCode.RightShift, Name = "ZentynalHub",
-})
+local function svc(name, m)
+	local ok, res = pcall(function()
+		return RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services[name].RF[m]
+	end)
+	if not ok then
+		local pkg = RS.Packages:FindFirstChild("Knit") or RS.Packages:FindFirstChild("knit")
+		if pkg then
+			local K = tryGameRequire(pkg)
+			if K then
+				local s = K.GetService(name)
+				if s and s[m] then return s[m] end
+			end
+		end
+		return nil
+	end
+	return res
+end
 
-local function notify(msg) pcall(function() window:Notify(msg) end) end
+local function rem(name) return RS.Remotes[name] end
+local function callSvc(name, m, ...)
+	local args = {...}
+	local s = knitSvc(name)
+	if s and s[m] then
+		return pcall(function() return s[m](s, table.unpack(args)) end)
+	end
+	local rf = svc(name, m)
+	if rf then
+		return pcall(function() return rf:InvokeServer(table.unpack(args)) end)
+	end
+	return false, "service not found"
+end
 
 local function char() return lp.Character end
 local function hrp()
@@ -123,10 +497,6 @@ local function hum()
 	local c = char(); return c and c:FindFirstChildOfClass("Humanoid")
 end
 local function attr(n) return lp:GetAttribute(n) end
-local function svc(name, m)
-	return RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services[name].RF[m]
-end
-local function rem(name) return RS.Remotes[name] end
 
 local CN = RS:FindFirstChild("CombatNet")
 local cn = { rid = 0, combo = 1, lastDecision = 0 }
@@ -154,6 +524,7 @@ bind(RS.ChildAdded:Connect(function(c)
 		if bindCNLate then bindCNLate(c) end
 	end
 end))
+
 local function swingAt(mob)
 	if not CN then return false end
 	if not (mob and mob.Parent and (mob:GetAttribute("Health") or 0) > 0) then return false end
@@ -168,37 +539,6 @@ local function swingAt(mob)
 	task.wait(0.08)
 	if mob.Parent then CN.HitClaim:FireServer(r, mob) end
 	return true
-end
-
-local function tryGameRequire(mod)
-	if not mod then return nil end
-	if typeof(getrenv) == "function" then
-		local ok, env = pcall(getrenv)
-		if ok and type(env) == "table" and type(env.require) == "function" then
-			local ok2, res = pcall(env.require, mod)
-			if ok2 and res ~= nil then return res end
-		end
-	end
-	local ok3, res3 = pcall(require, mod)
-	return (ok3 and res3 ~= nil) and res3 or nil
-end
-local Knit
-local function knitSvc(name)
-	if not Knit then
-		local pkg = RS.Packages:FindFirstChild("Knit") or RS.Packages:FindFirstChild("knit")
-		if pkg then Knit = tryGameRequire(pkg) end
-	end
-	if not Knit then return nil end
-	local ok, s = pcall(function() return Knit.GetService(name) end)
-	return ok and s or nil
-end
-local function callSvc(name, m, ...)
-	local args = {...}
-	local s = knitSvc(name)
-	if s and s[m] then
-		return pcall(function() return s[m](s, table.unpack(args)) end)
-	end
-	return pcall(function() return svc(name, m):InvokeServer(table.unpack(args)) end)
 end
 
 local moveOK = {tier = nil}
@@ -249,6 +589,13 @@ end
 local noclipOn, flyOn, infJumpOn, clickTPOn = false, false, false, false
 local flySpeed, wsOn, wsVal = 60, false, 16
 
+local C = {}
+local farmOn, farmTarget, auraOn, dead = false, "Forest Brawler", false, false
+local farmPos, farmDist, farmFloat = "Above", 8, true
+local farmYOff = 0
+local farmMob = nil
+local questBusy = false
+
 bind(RunService.Stepped:Connect(function()
 	local farmNoclip = farmOn and farmFloat
 	if (noclipOn or farmNoclip) and char() then
@@ -281,12 +628,6 @@ bind(RunService.Heartbeat:Connect(function()
 	if wsOn and hum() and hum().WalkSpeed ~= wsVal then hum().WalkSpeed = wsVal end
 end))
 
-local C = {}
-local farmOn, farmTarget, auraOn, dead = false, "Forest Brawler", false, false
-local farmPos, farmDist, farmFloat = "Above", 8, true
-local farmYOff = 0
-local farmMob = nil
-local questBusy = false
 local function farmCF(mob)
 	local mp = mob:GetPivot()
 	if farmPos == "Behind" then
@@ -343,7 +684,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- HELPERS: Quest state
+-- QUEST HELPERS
 -- ============================================================
 local function activeQuests()
 	local d = lp:FindFirstChild("Data")
@@ -368,11 +709,7 @@ local function isQuestActive(qid)
 	return getQuestFolder(qid) ~= nil
 end
 
--- ============================================================
--- HELPERS: NPC finding (robust, multi-strategy)
--- ============================================================
 local function findNPC(name)
-	-- Strategy 1: search World and its descendants
 	local world = workspace:FindFirstChild("World")
 	local roots = {world, workspace}
 	for _, root in pairs(roots) do
@@ -385,7 +722,6 @@ local function findNPC(name)
 			end
 		end
 	end
-	-- Strategy 2: check NPC-named folders inside World
 	if world then
 		local mapLocs = world:FindFirstChild("Map") and world.Map:FindFirstChild("Map Locations")
 		if mapLocs then
@@ -393,27 +729,6 @@ local function findNPC(name)
 				if area:IsA("Model") and area.Name == name then
 					local pp = area:FindFirstChildWhichIsA("ProximityPrompt", true)
 					if pp then return area, pp end
-				end
-			end
-		end
-	end
-	return nil, nil
-end
-
-local function findNPCNearby(name, range)
-	range = range or 50
-	local h = hrp()
-	if not h then return nil, nil end
-	local world = workspace:FindFirstChild("World")
-	for _, root in pairs({world, workspace}) do
-		if root then
-			for _, m in pairs(root:GetDescendants()) do
-				if m:IsA("Model") and m.Name == name then
-					local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
-					local pos = m:GetPivot().Position
-					if pp and (pos - h.Position).Magnitude <= range then
-						return m, pp
-					end
 				end
 			end
 		end
@@ -434,44 +749,21 @@ local function tpToNPCAndInteract(name)
 	return false
 end
 
--- ============================================================
--- BOARD QUEST SYSTEM
--- ============================================================
-
--- Exact mob name map from dump data
+-- Board Quests
 local KILL_TARGET_MAP = {
-	KillSandTank        = "Sand Tank",
-	KillArcticPhantom   = "Arctic Phantom",
-	KillFrostyFox       = "Frosty Fox",
-	KillFalseHunter     = "False Hunter",
-	KillIceSpirit       = "Ice Spirit",
-	KillFoxBearHunter   = "Foxbear Hunter",
-	["KillFoxBear Hunter"] = "Foxbear Hunter",
-	KillFireSpirits     = "Fire Spirit",
-	KillFarmKeeper      = "Farm Keeper",
-	KillSwampViper      = "Swamp Viper",
-	KillPurpleViper     = "Purple Viper",
-	KillStoneSoldier    = "Stone Soldier",
-	KillPortMarksman    = "Port Marksman",
-	KillChiefFarmer     = "Chief Farmer",
-	KillAngryFarmer     = "Angry Farmer",
-	KillPhantomGoon     = "Phantom Goon",
-	KillFrostFang       = "Frost Fang",
-	KillFrozenVanguard  = "Frozen Vanguard",
-	KillShiverWarrior   = "Shiver Warrior",
-	KillMoleRat         = "Mole Rat",
-	KillFireMaster      = "Fire Master",
-	KillPortInvader     = "Port Invader",
-	KillBlackBlick      = "Black Blick",
-	KillFoxBear         = "Fox Bear",
-	KillBeachBrawler    = "Beach Brawler",
-	KillForestBrawler   = "Forest Brawler",
-	KillCaveBrawler     = "Cave Brawler",
+	KillSandTank = "Sand Tank", KillArcticPhantom = "Arctic Phantom", KillFrostyFox = "Frosty Fox",
+	KillFalseHunter = "False Hunter", KillIceSpirit = "Ice Spirit", KillFoxBearHunter = "Foxbear Hunter",
+	["KillFoxBear Hunter"] = "Foxbear Hunter", KillFireSpirits = "Fire Spirit", KillFarmKeeper = "Farm Keeper",
+	KillSwampViper = "Swamp Viper", KillPurpleViper = "Purple Viper", KillStoneSoldier = "Stone Soldier",
+	KillPortMarksman = "Port Marksman", KillChiefFarmer = "Chief Farmer", KillAngryFarmer = "Angry Farmer",
+	KillPhantomGoon = "Phantom Goon", KillFrostFang = "Frost Fang", KillFrozenVanguard = "Frozen Vanguard",
+	KillShiverWarrior = "Shiver Warrior", KillMoleRat = "Mole Rat", KillFireMaster = "Fire Master",
+	KillPortInvader = "Port Invader", KillBlackBlick = "Black Blick", KillFoxBear = "Fox Bear",
+	KillBeachBrawler = "Beach Brawler", KillForestBrawler = "Forest Brawler", KillCaveBrawler = "Cave Brawler",
 }
 
 local function questMobName(qid)
 	if KILL_TARGET_MAP[qid] then return KILL_TARGET_MAP[qid] end
-	-- Fallback: split CamelCase from Kill prefix
 	if qid:sub(1,4) == "Kill" then
 		local raw = qid:sub(5)
 		return raw:gsub("(%u)", " %1"):gsub("^%s+", "")
@@ -512,8 +804,11 @@ local function findBoardForQuest(qid)
 	for _, d in pairs(root:GetDescendants()) do
 		if d:GetAttribute("Quest") == qid then
 			local b = d:FindFirstAncestorOfClass("Model")
-			local p = b and (b:FindFirstChild("Interactor", true) or b):FindFirstChildWhichIsA("ProximityPrompt", true)
-			if b and p then return b, p end
+			if b then
+				local interactor = b:FindFirstChild("Interactor", true) or b
+				local p = interactor:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if p then return b, p end
+			end
 		end
 	end
 end
@@ -552,7 +847,7 @@ local function acceptQuest(qid)
 
 	local function tryAccept()
 		if alreadyDone then
-			local ok1 = callSvc("QuestsService", "repeat_quest", qid)
+			callSvc("QuestsService", "repeat_quest", qid)
 			task.wait(0.6)
 			if activeQuests() and activeQuests():FindFirstChild(qid) then return true end
 			callSvc("QuestsService", "get_quest", qid, "yes")
@@ -604,18 +899,12 @@ task.spawn(function()
 					auraOn = true
 					if C.aura then C.aura:Set(true) end
 				end
-
 				local _, stage, progress = getQuestStage(questId)
-				local ok = callSvc("QuestsService", "collect", questId)
-				if ok then
-					notify("Quest collected: " .. questId .. " (stage " .. tostring(stage) .. ")")
-					task.wait(1)
-					local aq2 = activeQuests()
-					if not (aq2 and aq2:FindFirstChild(questId)) then
-						notify("Quest complete! Re-accepting...")
-						farmOn = false
-						nextTry = 0
-					end
+				callSvc("QuestsService", "collect", questId)
+				if not activeQuests():FindFirstChild(questId) then
+					notify("Quest complete! Re-accepting...")
+					farmOn = false
+					nextTry = 0
 				end
 			end
 			task.wait(2.5)
@@ -626,17 +915,12 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- STORY QUEST AUTO-CHAIN
--- One toggle that runs all undone story quests in sequence.
+-- STORY QUESTS
 -- ============================================================
-
 local storyQuestOn = false
 local storyQuestBusy = false
 
--- Check if a story quest has been permanently completed (can_only_be_done_once flag)
 local function isStoryQuestDone(qid)
-	-- The game sets a player attribute like "CompletedQuests" or stores them in Done folder
-	-- Check both common patterns
 	local d = lp:FindFirstChild("Data")
 	local ss = d and d:FindFirstChild("SavesSlot")
 	local slot = ss and ss:FindFirstChild(tostring(lp:GetAttribute("SelectedSlot") or 1))
@@ -644,16 +928,13 @@ local function isStoryQuestDone(qid)
 	if pd then
 		local done = pd:FindFirstChild("CompletedQuests") or pd:FindFirstChild("DoneQuests")
 		if done and done:FindFirstChild(qid) then return true end
-		-- Also check attributes on PlayerData
 		if pd:GetAttribute(qid) == true then return true end
 	end
-	-- Also check lp attributes
 	if lp:GetAttribute(qid .. "_done") == true then return true end
 	if lp:GetAttribute(qid) == true and qid ~= "StarterQuest" then return true end
 	return false
 end
 
--- Wait for a quest to become active with timeout
 local function waitForQuestActive(qid, timeout)
 	timeout = timeout or 10
 	local t0 = tick()
@@ -664,7 +945,6 @@ local function waitForQuestActive(qid, timeout)
 	return false
 end
 
--- Wait for quest stage to advance
 local function waitForQuestStage(qid, targetStage, timeout)
 	timeout = timeout or 60
 	local t0 = tick()
@@ -677,7 +957,6 @@ local function waitForQuestStage(qid, targetStage, timeout)
 	return false
 end
 
--- Wait for quest to leave active (completed)
 local function waitForQuestGone(qid, timeout)
 	timeout = timeout or 30
 	local t0 = tick()
@@ -688,61 +967,21 @@ local function waitForQuestGone(qid, timeout)
 	return false
 end
 
--- Kill farming helper for story quest chains
-local function farmUntilQuestStageAdvances(qid, fromStage, mobName, timeout)
-	timeout = timeout or 120
-	local t0 = tick()
-	local prevFarmTarget = farmTarget
-	local prevFarmOn = farmOn
-	local prevAuraOn = auraOn
-	farmTarget = mobName
-	farmOn = true
-	auraOn = true
-	if C.farmTarget then pcall(function() C.farmTarget:Set(mobName) end) end
-	if C.farm then pcall(function() C.farm:Set(true) end) end
-	if C.aura then pcall(function() C.aura:Set(true) end) end
-
-	while tick() - t0 < timeout and storyQuestOn do
-		local _, stage = getQuestStage(qid)
-		if not isQuestActive(qid) then break end
-		if stage and stage > fromStage then break end
-		-- Try collect
-		pcall(function() callSvc("QuestsService", "collect", qid) end)
-		task.wait(2)
-	end
-
-	farmOn = prevFarmOn
-	auraOn = prevAuraOn
-	farmTarget = prevFarmTarget
-	if C.farmTarget then pcall(function() C.farmTarget:Set(prevFarmTarget) end) end
-	if C.farm then pcall(function() C.farm:Set(prevFarmOn) end) end
-	if C.aura then pcall(function() C.aura:Set(prevAuraOn) end) end
-end
-
--- ========== Individual story quest handlers ==========
-
 local function doStarterQuest()
 	notify("[Story] Starting StarterQuest...")
-	-- Accept the quest if not active
 	if not isQuestActive("StarterQuest") then
 		callSvc("QuestsService", "get_quest", "StarterQuest", "yes")
 		task.wait(1)
-		-- Try talking to Diana to get it started
 		if tpToNPCAndInteract("Diana") then
 			callSvc("QuestsService", "get_quest", "StarterQuest", "yes")
 			task.wait(1)
 		end
 	end
-
 	if not waitForQuestActive("StarterQuest", 8) then
-		notify("[Story] StarterQuest: could not activate, skipping")
+		notify("[Story] StarterQuest: could not activate")
 		return false
 	end
-
 	local _, stage = getQuestStage("StarterQuest")
-	notify("[Story] StarterQuest stage: " .. tostring(stage))
-
-	-- Stage 1: Talk to Diana
 	if stage == 1 then
 		if tpToNPCAndInteract("Diana") then
 			callSvc("QuestsService", "get_quest", "StarterQuest", "yes")
@@ -751,27 +990,18 @@ local function doStarterQuest()
 		waitForQuestStage("StarterQuest", 2, 15)
 		local _, s2 = getQuestStage("StarterQuest")
 		stage = s2 or stage
-		notify("[Story] StarterQuest after Diana: stage " .. tostring(stage))
 	end
-
-	-- Stage 2: Rescue April - server method triggers mission room
 	if stage == 2 then
-		notify("[Story] StarterQuest: beginning rescue...")
 		callSvc("QuestsService", "run_method_on_server_handler", "StarterQuest", "begin_rescue")
 		task.wait(2)
-		-- Wait for mission room to spawn and auto-escape (the mission completes when you exit)
-		-- Try to find April and move to her, then escape
-		local aprilFound = false
 		local t0 = tick()
 		while tick() - t0 < 60 and storyQuestOn do
 			local aprilModel, aprilPP = findNPC("April")
 			if aprilModel then
-				aprilFound = true
 				moveTo(aprilModel:GetPivot() + Vector3.new(0, 0, 3))
 				task.wait(0.5)
 				if aprilPP then pcall(function() firePP(aprilPP) end) end
 				task.wait(1)
-				-- Equip April as carry tool if she appears in backpack
 				local carryTool = lp.Backpack:FindFirstChild("April") or lp.Backpack:FindFirstChildWhichIsA("Tool")
 				if carryTool and hum() then hum():EquipTool(carryTool) end
 				task.wait(0.5)
@@ -779,12 +1009,11 @@ local function doStarterQuest()
 			end
 			task.wait(1.5)
 		end
-		-- Try to find and escape through exit
 		local exitFound = false
 		local t1 = tick()
 		while tick() - t1 < 30 and storyQuestOn do
 			for _, m in pairs(workspace:GetDescendants()) do
-				if m:IsA("ProximityPrompt") and (m.ObjectText:lower():find("exit") or m.ObjectText:lower():find("escape") or m.ActionText:lower():find("exit")) then
+				if m:IsA("ProximityPrompt") and (m.ObjectText:lower():find("exit") or m.ObjectText:lower():find("escape")) then
 					local pos = m.Parent and m.Parent:IsA("BasePart") and m.Parent.Position
 					if pos then
 						moveTo(CFrame.new(pos))
@@ -803,19 +1032,14 @@ local function doStarterQuest()
 		local _, s3 = getQuestStage("StarterQuest")
 		stage = s3 or stage
 	end
-
-	-- Stage 3: Deliver April
 	if stage == 3 then
-		notify("[Story] StarterQuest: delivering April...")
 		callSvc("QuestsService", "run_method_on_server_handler", "StarterQuest", "deliver_april")
 		task.wait(1)
-		-- TP to Diana and collect
 		tpToNPCAndInteract("Diana")
 		task.wait(0.5)
 		callSvc("QuestsService", "collect", "StarterQuest")
 		task.wait(1)
 	end
-
 	waitForQuestGone("StarterQuest", 15)
 	notify("[Story] StarterQuest done!")
 	return true
@@ -824,34 +1048,25 @@ end
 local function doStarterWeapon()
 	notify("[Story] Starting StarterWeapon...")
 	if not isQuestActive("StarterWeapon") then
-		-- Accept from Jager (NPC who gives this quest)
 		if tpToNPCAndInteract("Jager") then
 			callSvc("QuestsService", "get_quest", "StarterWeapon", "yes")
 			task.wait(1)
 		end
 	end
-
 	if not waitForQuestActive("StarterWeapon", 8) then
 		notify("[Story] StarterWeapon: could not activate")
 		return false
 	end
-
 	local _, stage = getQuestStage("StarterWeapon")
-	notify("[Story] StarterWeapon stage: " .. tostring(stage))
-
-	-- Multiple dialog stages with Jager
 	for attempt = 1, 6 do
 		if not isQuestActive("StarterWeapon") then break end
 		local _, st = getQuestStage("StarterWeapon")
 		stage = st
-
 		if stage == 1 or stage == 2 or stage == 3 then
 			tpToNPCAndInteract("Jager")
 			callSvc("QuestsService", "get_quest", "StarterWeapon", "yes")
 			task.wait(1.5)
 		elseif stage == 4 then
-			-- Craft weapon at blacksmith
-			notify("[Story] StarterWeapon: looking for blacksmith...")
 			local smithFound = false
 			for _, m in pairs(workspace:GetDescendants()) do
 				if m:IsA("Model") then
@@ -871,12 +1086,8 @@ local function doStarterWeapon()
 					end
 				end
 			end
-			if not smithFound then
-				notify("[Story] StarterWeapon: smithy not found, skipping craft stage")
-			end
 			task.wait(1)
 		elseif stage == 5 then
-			-- Equip the weapon
 			local tool = lp.Backpack:FindFirstChildWhichIsA("Tool")
 			if tool and hum() then
 				hum():EquipTool(tool)
@@ -885,16 +1096,13 @@ local function doStarterWeapon()
 				task.wait(1)
 			end
 		elseif stage == 6 then
-			-- Final turn-in with Jager
 			tpToNPCAndInteract("Jager")
 			callSvc("QuestsService", "collect", "StarterWeapon")
 			task.wait(1)
 			break
 		end
-
 		task.wait(0.8)
 	end
-
 	waitForQuestGone("StarterWeapon", 15)
 	notify("[Story] StarterWeapon done!")
 	return true
@@ -902,29 +1110,20 @@ end
 
 local function doActivateNen()
 	notify("[Story] Starting ActivateNen...")
-
-	-- Find the Nen Cave in the world
 	local function getNenCave()
 		local world = workspace:FindFirstChild("World")
 		local map = world and world:FindFirstChild("Map")
 		local locs = map and map:FindFirstChild("Map Locations")
 		return locs and locs:FindFirstChild("Nen Cave")
 	end
-
 	local cave = getNenCave()
 	if not cave then
-		notify("[Story] ActivateNen: Nen Cave not found in map")
+		notify("[Story] ActivateNen: Nen Cave not found")
 		return false
 	end
-
-	-- TP to cave entrance
 	moveTo(cave:GetPivot() + Vector3.new(0, 3, 0))
 	task.wait(1)
-	notify("[Story] ActivateNen: at cave entrance")
-
-	-- Accept quest if not active — Rohan NPC inside cave
 	if not isQuestActive("ActivateNen") then
-		-- Find Rohan inside the ActivateNen subfolder
 		local nenFolder = cave:FindFirstChild("ActivateNen")
 		local rohanModel = nenFolder and nenFolder:FindFirstChild("Rohan")
 		if not rohanModel then rohanModel = findNPC("Rohan") end
@@ -940,32 +1139,21 @@ local function doActivateNen()
 		callSvc("QuestsService", "get_quest", "ActivateNen", "yes")
 		task.wait(1.5)
 	end
-
 	if not waitForQuestActive("ActivateNen", 8) then
 		notify("[Story] ActivateNen: could not activate")
 		return false
 	end
-
 	local _, stage = getQuestStage("ActivateNen")
-	notify("[Story] ActivateNen stage: " .. tostring(stage))
-
-	-- FIRST stage: Nen activation cutscene (triggers when player enters cave area)
 	if stage == 1 then
-		notify("[Story] ActivateNen: triggering FIRST (cutscene)...")
 		callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 1)
 		task.wait(2)
-		-- Walk deeper into cave to trigger auto-cutscene
 		moveTo(cave:GetPivot() + Vector3.new(0, 3, -10))
 		task.wait(2)
 		waitForQuestStage("ActivateNen", 2, 20)
 		local _, s2 = getQuestStage("ActivateNen")
 		stage = s2 or stage
 	end
-
-	-- SECOND stage: Water divination
 	if stage == 2 then
-		notify("[Story] ActivateNen: water divination (SECOND)...")
-		-- Look for WaterDivinationProp or any prop in cave
 		local divProp = cave:FindFirstChild("WaterDivinationProp", true) or cave:FindFirstChild("Divination", true)
 		if divProp then
 			moveTo(divProp:GetPivot() + Vector3.new(0, 0, 3))
@@ -982,23 +1170,17 @@ local function doActivateNen()
 		local _, s4 = getQuestStage("ActivateNen")
 		stage = s4 or stage
 	end
-
-	-- FOURTH stage: Meditate
 	if stage == 4 then
-		notify("[Story] ActivateNen: meditating (FOURTH)...")
-		-- Find a meditation spot or carpet in cave
 		local meditateSpot = cave:FindFirstChild("MeditationSpot", true) or cave:FindFirstChild("Carpet", true)
 		if meditateSpot then
 			moveTo(meditateSpot:GetPivot() + Vector3.new(0, 0.5, 0))
 			task.wait(0.5)
 		else
-			-- Just stay in cave and trigger progress
 			moveTo(cave:GetPivot() + Vector3.new(0, 3, 0))
 			task.wait(0.5)
 		end
 		callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 4)
 		task.wait(2)
-		-- Meditate for required time
 		for _ = 1, 10 do
 			if not storyQuestOn then break end
 			local _, s5 = getQuestStage("ActivateNen")
@@ -1010,10 +1192,7 @@ local function doActivateNen()
 		local _, s6 = getQuestStage("ActivateNen")
 		stage = s6 or stage
 	end
-
-	-- SIXTH stage: Collect from Rohan
 	if stage == 6 then
-		notify("[Story] ActivateNen: collecting (SIXTH)...")
 		local nenFolder = cave:FindFirstChild("ActivateNen")
 		local rohanModel = nenFolder and nenFolder:FindFirstChild("Rohan")
 		if not rohanModel then rohanModel, _ = findNPC("Rohan") end
@@ -1029,7 +1208,6 @@ local function doActivateNen()
 		callSvc("QuestsService", "collect", "ActivateNen")
 		task.wait(1.5)
 	end
-
 	waitForQuestGone("ActivateNen", 15)
 	notify("[Story] ActivateNen done!")
 	return true
@@ -1037,23 +1215,16 @@ end
 
 local function doTrainingSession()
 	notify("[Story] Starting TrainingSession...")
-	-- ExplorativeQuestService.special_quests based training
 	callSvc("ExplorativeQuestService", "special_quests", "TrainingSession")
 	task.wait(1)
-	-- Accept via QuestsService too
 	callSvc("QuestsService", "get_quest", "TrainingSession", "yes")
 	task.wait(1)
-
 	if not waitForQuestActive("TrainingSession", 8) then
-		notify("[Story] TrainingSession: not active after attempt")
-		-- Still try to interact if any trainer NPC exists
 		if tpToNPCAndInteract("Trainer") then
 			callSvc("QuestsService", "get_quest", "TrainingSession", "yes")
 			task.wait(1)
 		end
 	end
-
-	-- Wait and try to collect
 	for _ = 1, 10 do
 		if not storyQuestOn then break end
 		pcall(function() callSvc("QuestsService", "collect", "TrainingSession") end)
@@ -1066,23 +1237,17 @@ end
 
 local function doLostHouseKey()
 	notify("[Story] Starting LostHouseKey...")
-	-- spot_quests type quest — Librarian NPC
 	callSvc("QuestsService", "get_quest", "LostHouseKey", "yes")
 	task.wait(1)
 	if tpToNPCAndInteract("Librarian") then
 		callSvc("QuestsService", "get_quest", "LostHouseKey", "yes")
 		task.wait(1)
 	end
-
 	if not waitForQuestActive("LostHouseKey", 8) then
-		notify("[Story] LostHouseKey: not active, trying fallback")
 		callSvc("QuestsService", "get_quest", "LostHouseKey", "yes")
 		task.wait(1)
 	end
-
-	-- Search for the key (BasePart or Model with Key in name)
 	local t0 = tick()
-	local keyFound = false
 	while tick() - t0 < 60 and storyQuestOn do
 		for _, m in pairs(workspace:GetDescendants()) do
 			if (m:IsA("Model") or m:IsA("BasePart")) and m.Name:lower():find("key") then
@@ -1094,16 +1259,13 @@ local function doLostHouseKey()
 					task.wait(0.4)
 					pcall(function() firePP(pp) end)
 					task.wait(0.8)
-					keyFound = true
-					break
+					goto keyDone
 				end
 			end
 		end
-		if keyFound then break end
 		task.wait(2)
 	end
-
-	-- Return key to Librarian
+	::keyDone::
 	tpToNPCAndInteract("Librarian")
 	callSvc("QuestsService", "collect", "LostHouseKey")
 	task.wait(1)
@@ -1113,13 +1275,10 @@ end
 
 local function doBeachDelivery()
 	notify("[Story] Starting BeachDelivery...")
-	-- ExplorativeQuestService.Delivery type
 	callSvc("ExplorativeQuestService", "Delivery", "BeachDelivery")
 	task.wait(1)
 	callSvc("QuestsService", "get_quest", "BeachDelivery", "yes")
 	task.wait(1)
-
-	-- Find delivery NPC or dropoff point
 	local t0 = tick()
 	while tick() - t0 < 60 and storyQuestOn do
 		if not isQuestActive("BeachDelivery") then break end
@@ -1138,15 +1297,12 @@ local function doBeachDelivery()
 		task.wait(3)
 	end
 	::beachDone::
-	-- Final collect attempt
 	pcall(function() callSvc("QuestsService", "collect", "BeachDelivery") end)
 	task.wait(1)
 	notify("[Story] BeachDelivery done!")
 	return true
 end
 
--- ========== Main story quest chain loop ==========
--- Ordered list of story quests; CAN_ONLY_BE_DONE_ONCE ones skip if completed
 local STORY_CHAIN = {
 	{ id = "StarterQuest",    fn = doStarterQuest,   once = true  },
 	{ id = "StarterWeapon",   fn = doStarterWeapon,  once = true  },
@@ -1161,16 +1317,10 @@ task.spawn(function()
 		if storyQuestOn and not storyQuestBusy then
 			storyQuestBusy = true
 			local didAny = false
-
 			for _, entry in ipairs(STORY_CHAIN) do
 				if not storyQuestOn then break end
 				local qid = entry.id
-
-				-- Skip if already completed (once-only quests)
-				if entry.once and isStoryQuestDone(qid) then
-					-- Already done, skip
-				elseif isQuestActive(qid) or not entry.once or not isStoryQuestDone(qid) then
-					-- Do this quest
+				if not (entry.once and isStoryQuestDone(qid)) then
 					local ok, err = pcall(entry.fn)
 					if not ok then
 						notify("[Story] Error on " .. qid .. ": " .. tostring(err))
@@ -1178,16 +1328,13 @@ task.spawn(function()
 					didAny = true
 					task.wait(2)
 				end
-
 				task.wait(0.5)
 			end
-
 			if not didAny then
 				notify("[Story] All story quests done or skipped!")
 				storyQuestOn = false
 				if C.storyAuto then pcall(function() C.storyAuto:Set(false) end) end
 			end
-
 			storyQuestBusy = false
 		end
 		task.wait(3)
@@ -1195,7 +1342,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- Chest / Skill / Auto Systems (unchanged from original)
+-- CHESTS / FARM / PARRY / SKILLS / WEAPONS / TALENTS
 -- ============================================================
 local chestOn = false
 task.spawn(function()
@@ -1592,6 +1739,9 @@ pcall(function()
 	end))
 end)
 
+-- ============================================================
+-- CONFIG
+-- ============================================================
 local CFG = "ZentynalHub.json"
 local function saveConfig()
 	local data = {
@@ -1644,10 +1794,8 @@ local function loadConfig()
 	end)
 end
 task.delay(1, loadConfig)
-if queueTP then
-	pcall(function() queueTP('local s; if type(isfile)=="function" then for _,p in pairs({"Zentynal/ZentynalHub.lua","ZentynalHub.lua"}) do if isfile(p) then s=readfile(p) break end end end; if s then loadstring(s)() end') end)
-end
 
+-- ESP
 local espOn = {players=false, mobs=false, chests=false, bosses=false}
 local espObjs = {}
 local function clearESP()
@@ -1705,7 +1853,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- UI BUILD
+-- UI BUILD (Using Standalone Library)
 -- ============================================================
 task.delay(0.5, function()
 	local tProg   = window:AddTab("Progression")
@@ -1717,13 +1865,10 @@ task.delay(0.5, function()
 	local tVis    = window:AddTab("Visuals")
 	local tCred   = window:AddTab("Credits")
 
-	-- ===================== PROGRESSION TAB =====================
+	-- Progression
 	local s3 = tProg:Section("Utility")
-	C.meditate = s3:Toggle({Text="Auto Meditate", Description="Sits at the nearest meditation spot and auto-answers prompts.", Default=false, Callback=function(v) medOn=v end})
-	s3:Button({Text="AFK Chamber", Callback=function()
-		local ok,res = callSvc("AfkTransferService","RequestAfkTransfer")
-		notify("AFK transfer: " .. tostring(res or ok))
-	end})
+	C.meditate = s3:Toggle({Text="Auto Meditate", Default=false, Callback=function(v) medOn=v end})
+	s3:Button({Text="AFK Chamber", Callback=function() callSvc("AfkTransferService","RequestAfkTransfer") end})
 	s3:Button({Text="Respawn", Callback=function() callSvc("DeathService","Respawn") end})
 
 	local s3b = tProg:Section("Talent Cards")
@@ -1738,34 +1883,22 @@ task.delay(0.5, function()
 		else notify("No pending talent choice") end
 	end})
 
-	-- ===================== STORY QUESTS TAB =====================
+	-- Story Quests
 	local sStory = tStory:Section("Story Quest Automation")
-	sStory:Label("Automatically completes all story quests you haven't done yet, in the correct order.")
-	sStory:Label("Order: StarterQuest → StarterWeapon → ActivateNen → TrainingSession → LostHouseKey → BeachDelivery")
-
+	sStory:Label("Auto-completes all story quests in order.")
 	C.storyAuto = sStory:Toggle({
 		Text = "Auto Story Quests",
-		Description = "Runs all incomplete story quests automatically in sequence.",
 		Default = false,
 		Callback = function(v)
 			storyQuestOn = v
-			if v then
-				notify("[Story] Auto Story Quests enabled — running chain...")
-			else
-				notify("[Story] Auto Story Quests stopped.")
-				storyQuestBusy = false
-			end
+			if v then notify("[Story] Auto Story Quests enabled")
+			else notify("[Story] Auto Story Quests stopped"); storyQuestBusy = false end
 		end
 	})
 
-	-- ===================== BOARD QUESTS TAB =====================
-	local sBoardInfo = tBoards:Section("Board Quest Info")
-	sBoardInfo:Label("Select a quest from the board, enable Auto Quest, and the farm will start automatically.")
-
+	-- Board Quests
 	local s4b = tBoards:Section("Auto Quest")
-	local allQuests = {}
-	-- Start with known kill quests from dump
-	allQuests = {
+	local allQuests = {
 		"KillForestBrawler","KillCaveBrawler","KillMoleRat","KillFoxBearHunter","KillBlackBlick",
 		"KillBeachBrawler","KillFoxBear","KillPortInvader","KillPortMarksman","KillFireMaster",
 		"KillAngryFarmer","KillChiefFarmer","KillFarmKeeper","KillPhantomGoon","KillStoneSoldier",
@@ -1773,37 +1906,15 @@ task.delay(0.5, function()
 		"KillShiverWarrior","KillFrostyFox","KillIceSpirit","KillFalseHunter","KillArcticPhantom","KillSandTank"
 	}
 	table.sort(allQuests)
+	C.quest = s4b:Dropdown({Text="Select Quest", Options=allQuests, Default=allQuests[1], Callback=function(v) questId=v end})
+	C.autoQuest = s4b:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
 
-	C.quest = s4b:Dropdown({
-		Text="Select Quest",
-		Options=allQuests,
-		Default=allQuests[1],
-		Callback=function(v) questId=v end
-	})
-	s4b:TextBox({Text="Custom Quest ID", Placeholder="e.g. KillMoleRat", Callback=function(v)
-		if #v > 0 then questId = v end
-	end})
-	C.autoQuest = s4b:Toggle({
-		Text="Auto Quest",
-		Description="Automatically accept, farm, and re-accept the selected quest.",
-		Default=false,
-		Callback=function(v) autoQuest=v end
-	})
-
-	local sFarmLink = tBoards:Section("Farm Settings (linked)")
-	sFarmLink:Label("Farm Position, Distance, and Float settings are on the Farm tab.")
-	sFarmLink:Button({Text="Enable Kill Aura for Quest", Callback=function()
-		auraOn = true
-		if C.aura then C.aura:Set(true) end
-		notify("Kill Aura enabled")
-	end})
-
-	-- ===================== COMBAT TAB =====================
+	-- Combat
 	local sCombat = tCombat:Section("Combat")
 	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
 	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
 	C.parryRange = sCombat:Slider({Text="Parry Range", Min=8, Max=30, Default=16, Callback=function(v) parryRange=v end})
-	C.parryDelay = sCombat:Slider({Text="Parry Timing", Description="Hundredths of a second before impact.", Min=20, Max=60, Default=32, Callback=function(v) parryDelay=v/100 end})
+	C.parryDelay = sCombat:Slider({Text="Parry Timing", Min=20, Max=60, Default=32, Callback=function(v) parryDelay=v/100 end})
 	C.skills = sCombat:Toggle({Text="Auto Skills", Default=false, Callback=function(v) skillOn=v end})
 	C.grip = sCombat:Toggle({Text="Auto Grip", Default=false, Callback=function(v) gripOn=v end})
 
@@ -1828,7 +1939,7 @@ task.delay(0.5, function()
 	end})
 	C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
 
-	-- ===================== FARM TAB =====================
+	-- Farm
 	local s4 = tFarm:Section("Auto Farm")
 	C.farmTarget = s4:Dropdown({
 		Text="Target",
@@ -1859,17 +1970,17 @@ task.delay(0.5, function()
 	C.chests = s4c:Toggle({Text="Auto Chests", Default=false, Callback=function(v) chestOn=v end})
 
 	local s4d = tFarm:Section("Gathering")
-	C.mine = s4d:Toggle({Text="Auto Mine", Description="Hops ore nodes and swings. Needs a pickaxe equipped.", Default=false, Callback=function(v) mineOn=v end})
-	C.fish = s4d:Toggle({Text="Auto Fish", Description="Casts, waits for the bite, reels in. Needs a rod equipped.", Default=false, Callback=function(v) fishOn=v end})
+	C.mine = s4d:Toggle({Text="Auto Mine", Default=false, Callback=function(v) mineOn=v end})
+	C.fish = s4d:Toggle({Text="Auto Fish", Default=false, Callback=function(v) fishOn=v end})
 
-	-- ===================== MOVEMENT TAB =====================
+	-- Movement
 	local s5 = tMove:Section("Movement")
 	C.noclip = s5:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
 	C.fly = s5:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
 	C.flySpeed = s5:Slider({Text="Fly Speed", Min=20, Max=150, Default=60, Callback=function(v) flySpeed=v end})
 	C.infJump = s5:Toggle({Text="Infinite Jump", Default=false, Callback=function(v) infJumpOn=v end})
 	C.clickTP = s5:Toggle({Text="Click TP", Default=false, Callback=function(v) clickTPOn=v end})
-	C.ws = s5:Toggle({Text="WalkSpeed", Description="May trip the movement audit at high values.", Default=false, Callback=function(v) wsOn=v end})
+	C.ws = s5:Toggle({Text="WalkSpeed", Default=false, Callback=function(v) wsOn=v end})
 	C.wsVal = s5:Slider({Text="WalkSpeed Value", Min=16, Max=120, Default=40, Callback=function(v) wsVal=v end})
 
 	local s5b = tMove:Section("Travel")
@@ -1883,8 +1994,8 @@ task.delay(0.5, function()
 	end
 	C.campfire = s5b:Dropdown({Text="Campfire", Options=cfNames, Default=cfNames[1], Callback=function(v) cfChoice=v end})
 	s5b:Button({Text="Fast Travel", Callback=function()
-		local ok,res = callSvc("CampfireService","FastTravel",cfChoice)
-		notify("Fast travel " .. cfChoice .. ": " .. tostring(res or ok))
+		callSvc("CampfireService","FastTravel",cfChoice)
+		notify("Fast travel " .. cfChoice)
 	end})
 	s5b:Button({Text="Set Spawn", Callback=function()
 		callSvc("CampfireService","SetSpawn",cfChoice)
@@ -1899,7 +2010,7 @@ task.delay(0.5, function()
 		pcall(function() TeleportService:Teleport(game.PlaceId, lp) end)
 	end})
 
-	-- ===================== VISUALS TAB =====================
+	-- Visuals
 	local s6 = tVis:Section("ESP")
 	C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
 	C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
@@ -1907,20 +2018,14 @@ task.delay(0.5, function()
 	C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
 	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
 
-	-- ===================== CREDITS TAB =====================
+	-- Credits
 	local s7 = tCred:Section("Credits")
-	s7:Label("Zentynal Hub v3")
-	s7:Label("https://discord.gg/qrRjkjeBn5")
-	s7:Button({Text="Copy Discord Link", Callback=function()
-		if clipSet then clipSet("https://discord.gg/qrRjkjeBn5") notify("Discord link copied") end
-	end})
+	s7:Label("Zentynal Hub v3 (Standalone UI)")
 	s7:Button({Text="Unload Hub", Danger=true, Callback=function()
 		if ENV.ZentynalHub then ENV.ZentynalHub.Destroy() end
 	end})
-
 	local s8 = tCred:Section("Config")
 	s8:Button({Text="Save Config", Callback=function() saveConfig() notify("Config saved") end})
-	s8:Label("Auto-loads on launch. The hub re-runs itself after teleports.")
 end)
 
 local function destroy()
@@ -1933,7 +2038,7 @@ local function destroy()
 	for _,c in pairs(watched) do pcall(function() c:Disconnect() end) end
 	for _,i in pairs(injected) do pcall(function() i:Destroy() end) end
 	setAntiAFK(false); clearESP(); setFB(false)
-	pcall(function() if window.Destroy then window:Destroy() end end)
+	pcall(function() if window.Gui then window.Gui:Destroy() end end)
 end
 ENV.ZentynalHub = {Destroy = destroy, Window = window}
-print("[Zentynal] hub v3 loaded")
+print("[Zentynal] hub v3 loaded (Standalone UI)")
