@@ -1,20 +1,22 @@
 -- ZentynalLib.lua
--- Zentynal UI Library V6 (Full + Polish)
--- Drop-in for Zentynal Hub.
--- Components: Toggle, Button, Slider, TextBox, Keybind, ColorPicker,
--- Dropdown, Label, Paragraph, Icon headers, Tab search, Toasts,
--- Window drag, Mobile scaling, Popup layer, Reopen pill.
+-- Zentynal UI Library V7 (Full + Polish + Config + Promo)
+-- Drop-in for YourNenHub.
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 local LIB_NAME = "Zentynal"
 local LOGO_ASSET = "rbxassetid://114884658309823"
 local LOGO_FILE = "Zentynal/logo.png"
+local CONFIG_DIR = "Zentynal/configs"
+local PROMO_FILE = "Zentynal/promo_seen.txt"
+local PROMO_LINK = "https://discord.gg/qrRjkjeBn5"
+local PROMO_COOLDOWN = 5
 
 local function isCompact()
 	local cam = workspace.CurrentCamera
@@ -39,6 +41,41 @@ local function pointer01(gui, input)
 	local size = gui.AbsoluteSize
 	return math.clamp((p.X - abs.X) / math.max(1, size.X), 0, 1),
 		math.clamp((p.Y - abs.Y) / math.max(1, size.Y), 0, 1)
+end
+
+local function safeReadFile(path)
+	if typeof(readfile) ~= "function" then return nil end
+	local ok, data = pcall(readfile, path)
+	if ok then return data end
+	return nil
+end
+
+local function safeWriteFile(path, data)
+	if typeof(writefile) ~= "function" then return false end
+	return pcall(writefile, path, data)
+end
+
+local function safeMkDir(path)
+	if typeof(makefolder) ~= "function" then return end
+	pcall(makefolder, path)
+end
+
+local function safeIsFile(path)
+	if typeof(isfile) ~= "function" then return false end
+	local ok, res = pcall(isfile, path)
+	return ok and res == true
+end
+
+local function safeListFiles(path)
+	if typeof(listfiles) ~= "function" then return {} end
+	local ok, res = pcall(listfiles, path)
+	if ok and type(res) == "table" then return res end
+	return {}
+end
+
+local function safeDelFile(path)
+	if typeof(delfile) ~= "function" then return end
+	pcall(delfile, path)
 end
 
 local Theme = {
@@ -273,6 +310,7 @@ local Library = { Theme = Theme, Windows = {}, Maid = Maid }
 local activeDropdownClose = nil
 local activeColorClose = nil
 local popupLayer = nil
+local promoShownThisSession = false
 
 function Library.SetTheme(patch)
 	for k, v in pairs(patch or {}) do Theme[k] = v end
@@ -416,8 +454,33 @@ local function hsvToRgb(h, s, v)
 	return Color3.new(v, p, q)
 end
 
+local function colorToArray(c)
+	return { math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5) }
+end
+
+local function arrayToColor(t)
+	if type(t) ~= "table" then return nil end
+	local r = tonumber(t[1] or t.R or t.r) or 0
+	local g = tonumber(t[2] or t.G or t.g) or 0
+	local b = tonumber(t[3] or t.B or t.b) or 0
+	return Color3.fromRGB(math.clamp(r, 0, 255), math.clamp(g, 0, 255), math.clamp(b, 0, 255))
+end
+
+local function keyToName(key)
+	if typeof(key) == "EnumItem" then return key.Name end
+	if type(key) == "string" then return key end
+	return nil
+end
+
+local function nameToKey(name)
+	if type(name) ~= "string" then return nil end
+	local ok, key = pcall(function() return Enum.KeyCode[name] end)
+	if ok then return key end
+	return nil
+end
+
 -- ── Section (card) ──────────────────────────────────────────────────────
-local function createSection(host, title)
+local function createSection(host, title, registry)
 	local card = mk("Frame", {
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
@@ -556,7 +619,7 @@ local function createSection(host, title)
 		}, track)
 		corner(knob, 9)
 
-		local ctrl = { Flag = opts.Flag, Get = function() return on end }
+		local ctrl = { Flag = opts.Flag, _kind = "toggle", Get = function() return on end }
 		function ctrl:Set(v, silent)
 			on = v and true or false
 			tween(track, { BackgroundColor3 = on and accent or Theme.off }, 0.16)
@@ -565,6 +628,7 @@ local function createSection(host, title)
 		end
 		hoverScale(track, 1.04)
 		track.MouseButton1Click:Connect(function() pressPunch(track) ctrl:Set(not on, false) end)
+		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
@@ -671,7 +735,7 @@ local function createSection(host, title)
 		}, bar)
 		corner(knob, 6)
 
-		local ctrl = {}
+		local ctrl = { Flag = opts.Flag, _kind = "slider" }
 		local function apply(alpha, silent)
 			alpha = math.clamp(alpha, 0, 1)
 			value = minV + (maxV - minV) * alpha
@@ -703,6 +767,7 @@ local function createSection(host, title)
 				end)
 			end
 		end)
+		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
@@ -736,9 +801,12 @@ local function createSection(host, title)
 		corner(box, 8)
 		pad(box, 0, 0, 10, 10)
 		local boxStroke = stroke(box, Theme.stroke, 1, 0.35)
-		local ctrl = {}
+		local ctrl = { Flag = opts.Flag, _kind = "textbox" }
 		function ctrl:Get() return box.Text end
-		function ctrl:Set(text) box.Text = tostring(text or "") end
+		function ctrl:Set(text, silent)
+			box.Text = tostring(text or "")
+			if not silent and opts.Callback then opts.Callback(box.Text, false) end
+		end
 		box.Focused:Connect(function()
 			tween(boxStroke, { Color = Theme.accent, Transparency = 0.05 }, 0.16)
 			tween(box, { BackgroundColor3 = Theme.tabIdle }, 0.16)
@@ -748,6 +816,7 @@ local function createSection(host, title)
 			tween(box, { BackgroundColor3 = Theme.panelAlt }, 0.2)
 			if opts.Callback then opts.Callback(box.Text, enter) end
 		end)
+		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
@@ -798,7 +867,7 @@ local function createSection(host, title)
 		corner(btn, 6)
 		stroke(btn, Theme.stroke, 1, 0.3)
 		hoverScale(btn, 1.06)
-		local ctrl = {}
+		local ctrl = { Flag = opts.Flag, _kind = "keybind" }
 		local function paint()
 			btn.Text = listening and "..." or current.Name
 			tween(btn, {
@@ -825,6 +894,7 @@ local function createSection(host, title)
 			ctrl:Set(input.KeyCode, false)
 		end)
 		paint()
+		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
@@ -1011,13 +1081,22 @@ local function createSection(host, title)
 			end
 			if not hit(pop) and not hit(openBtn) then closePop() end
 		end)
+		local ctrl = { Flag = opts.Flag, _kind = "colorpicker" }
 		function ctrl:Set(color, silent)
-			if typeof(color) ~= "Color3" then return end
-			h, s, v = rgbToHsv(color)
-			apply(silent == true)
+			if typeof(color) == "Color3" then
+				h, s, v = rgbToHsv(color)
+				apply(silent == true)
+			elseif type(color) == "table" then
+				local c = arrayToColor(color)
+				if c then
+					h, s, v = rgbToHsv(c)
+					apply(silent == true)
+				end
+			end
 		end
 		function ctrl:Get() return current end
 		apply(true)
+		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
@@ -1027,10 +1106,10 @@ local function createSection(host, title)
 		local rawOpts = opts.Options or opts.Values or opts.List or {}
 		if type(rawOpts) == "table" then
 			if #rawOpts > 0 then
-				for _, v in ipairs(rawOpts) do table.insert(options, tostring(v)) end
+				for _, vv in ipairs(rawOpts) do table.insert(options, tostring(vv)) end
 			else
-				for k, v in pairs(rawOpts) do
-					local s = type(v) == "string" and v ~= "" and v or (type(k) == "string" and k or "")
+				for k, vv in pairs(rawOpts) do
+					local s = type(vv) == "string" and vv ~= "" and vv or (type(k) == "string" and k or "")
 					if s ~= "" then table.insert(options, s) end
 				end
 				table.sort(options)
@@ -1067,11 +1146,11 @@ local function createSection(host, title)
 		pad(list, 3, 3, 3, 3)
 		mk("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 
-		local ctrl = {}
+		local ctrl = { Flag = opts.Flag, _kind = "dropdown" }
 		local itemButtons = {}
 
-		local function setValue(v, silent)
-			value = tostring(v)
+		local function setValue(vv, silent)
+			value = tostring(vv)
 			valueLabel.Text = value
 			for _, item in ipairs(itemButtons) do
 				local selected = item.Name == value
@@ -1136,20 +1215,20 @@ local function createSection(host, title)
 		end
 
 		function ctrl:Get() return value end
-		function ctrl:Set(v, silent)
-			if table.find(options, tostring(v)) then setValue(v, silent) end
+		function ctrl:Set(vv, silent)
+			if table.find(options, tostring(vv)) then setValue(vv, silent) end
 		end
 		function ctrl:SetOptions(listOpts, keep)
 			local incoming = {}
 			if type(listOpts) == "table" then
 				if #listOpts > 0 then
-					for _, v in ipairs(listOpts) do
-						local s = tostring(v)
+					for _, vv in ipairs(listOpts) do
+						local s = tostring(vv)
 						if s ~= "" then table.insert(incoming, s) end
 					end
 				else
-					for k, v in pairs(listOpts) do
-						local s = type(v) == "string" and v ~= "" and v or (type(k) == "string" and k or "")
+					for k, vv in pairs(listOpts) do
+						local s = type(vv) == "string" and vv ~= "" and vv or (type(k) == "string" and k or "")
 						if s ~= "" then table.insert(incoming, s) end
 					end
 					table.sort(incoming)
@@ -1206,10 +1285,206 @@ local function createSection(host, title)
 			if menu then menu:Destroy() end
 			if catcher then catcher:Destroy() end
 		end)
+		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	return api
+end
+
+-- ── Promo popup ─────────────────────────────────────────────────────────
+local function showPromo(screen)
+	if promoShownThisSession then return end
+	if safeIsFile(PROMO_FILE) then return end
+	promoShownThisSession = true
+
+	local overlay = mk("Frame", {
+		Name = "PromoOverlay",
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 9000,
+		Active = true,
+	}, screen)
+	corner(overlay, 0)
+
+	local card = mk("Frame", {
+		Name = "PromoCard",
+		BackgroundColor3 = Theme.panel,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.fromOffset(380, 240),
+		ZIndex = 9001,
+	}, overlay)
+	corner(card, 14)
+	mk("UIGradient", { Color = ColorSequence.new(Theme.panel, Theme.panelHi), Rotation = 45 }, card)
+	stroke(card, Theme.accentDim, 1, 0.3)
+
+	local topBar = mk("Frame", {
+		BackgroundColor3 = Theme.accent,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 2),
+		ZIndex = 9002,
+	}, card)
+	mk("UIGradient", {
+		Color = ColorSequence.new(Theme.accentDim, Theme.cyan),
+	}, topBar)
+
+	local brand = makeBrand(card, 44, 9002)
+	brand.AnchorPoint = Vector2.new(0.5, 0)
+	brand.Position = UDim2.new(0.5, 0, 0, 22)
+
+	mk("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 82),
+		Size = UDim2.new(1, 0, 0, 22),
+		Font = Enum.Font.GothamBold,
+		Text = "Join the community",
+		TextColor3 = Theme.text,
+		TextSize = 17,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 9002,
+	}, card)
+
+	mk("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(20, 108),
+		Size = UDim2.new(1, -40, 0, 44),
+		Font = Enum.Font.Gotham,
+		Text = "We drop updates, sneak peeks, and support here first. Hop in so you don't miss anything.",
+		TextColor3 = Theme.textDim,
+		TextSize = 12,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 9002,
+	}, card)
+
+	local copyBtn = mk("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = Theme.accentDim,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(20, 164),
+		Size = UDim2.new(0.5, -26, 0, 36),
+		Font = Enum.Font.GothamBold,
+		Text = "Copy invite link",
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextSize = 12,
+		ZIndex = 9002,
+	}, card)
+	corner(copyBtn, 8)
+	stroke(copyBtn, Theme.accent, 1, 0.1)
+	hoverScale(copyBtn, 1.02)
+
+	local closeBtn = mk("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = Theme.panelAlt,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0.5, 6, 0, 164),
+		Size = UDim2.new(0.5, -26, 0, 36),
+		Font = Enum.Font.GothamBold,
+		Text = "Close (5)",
+		TextColor3 = Theme.textDim,
+		TextSize = 12,
+		ZIndex = 9002,
+	}, card)
+	corner(closeBtn, 8)
+	stroke(closeBtn, Theme.stroke, 1, 0.4)
+
+	local linkBox = mk("TextBox", {
+		BackgroundColor3 = Theme.panelAlt,
+		BackgroundTransparency = 0.4,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(20, 208),
+		Size = UDim2.new(1, -40, 0, 0),
+		Text = "",
+		Font = Enum.Font.Gotham,
+		TextSize = 0,
+		ZIndex = 9002,
+	}, card)
+	linkBox.Visible = false
+
+	local copied = false
+	local function setCopied()
+		copied = true
+		copyBtn.Text = "Copied!"
+		copyBtn.BackgroundColor3 = Theme.accent
+		task.delay(1.6, function()
+			if copyBtn and copyBtn.Parent then
+				copyBtn.Text = "Copy invite link"
+				copyBtn.BackgroundColor3 = Theme.accentDim
+			end
+		end)
+	end
+
+	local function doCopy()
+		pcall(function()
+			if typeof(setclipboard) == "function" then
+				setclipboard(PROMO_LINK)
+				return
+			end
+			if typeof(toclipboard) == "function" then
+				toclipboard(PROMO_LINK)
+				return
+			end
+			if typeof(writeclipboard) == "function" then
+				writeclipboard(PROMO_LINK)
+				return
+			end
+		end)
+		setCopied()
+	end
+
+	copyBtn.MouseButton1Click:Connect(function()
+		pressPunch(copyBtn)
+		doCopy()
+	end)
+
+	local canClose = false
+	local remaining = PROMO_COOLDOWN
+	local function tick()
+		remaining -= 1
+		if remaining > 0 then
+			closeBtn.Text = string.format("Close (%d)", remaining)
+		else
+			canClose = true
+			closeBtn.Text = "Close"
+			closeBtn.TextColor3 = Theme.text
+			tween(closeBtn, { BackgroundColor3 = Theme.panelAlt }, 0.16)
+			stroke(closeBtn, Theme.strokeHi, 1, 0.2)
+		end
+	end
+	task.spawn(function()
+		task.wait(1)
+		while remaining > 0 do
+			tick()
+			task.wait(1)
+		end
+	end)
+
+	local function dismiss()
+		if not canClose then return end
+		safeMkDir("Zentynal")
+		safeWriteFile(PROMO_FILE, tostring(os.time()))
+		tween(overlay, { BackgroundTransparency = 1 }, 0.2)
+		tween(card, { BackgroundTransparency = 1 }, 0.2)
+		task.wait(0.24)
+		if overlay and overlay.Parent then overlay:Destroy() end
+	end
+
+	closeBtn.MouseButton1Click:Connect(function()
+		if not canClose then return end
+		pressPunch(closeBtn)
+		dismiss()
+	end)
+
+	overlay.BackgroundTransparency = 1
+	tween(overlay, { BackgroundTransparency = 0.5 }, 0.24)
+	card.Size = UDim2.fromOffset(340, 210)
+	tween(card, { Size = UDim2.fromOffset(380, 240) }, 0.3, Enum.EasingStyle.Back)
+
+	return overlay
 end
 
 -- ── Window ───────────────────────────────────────────────────────────────
@@ -1490,6 +1765,7 @@ function Library.CreateWindow(opts)
 		_active = nil,
 		_open = false,
 		_search = "",
+		_flags = {},
 	}
 
 	closeBtn.MouseButton1Click:Connect(function() window:SetOpen(false) end)
@@ -1593,7 +1869,7 @@ function Library.CreateWindow(opts)
 		local tabApi = { Name = name, Button = btn, Page = page, _sections = {}, _iconBox = iconBox, _accent = accentBar, _label = label }
 
 		function tabApi:Section(sectionTitle)
-			local sec = createSection(page, sectionTitle)
+			local sec = createSection(page, sectionTitle, window._flags)
 			table.insert(self._sections, sec)
 			return sec
 		end
@@ -1605,16 +1881,6 @@ function Library.CreateWindow(opts)
 				if shown then any = true end
 			end
 			return any
-		end
-
-		local function paintIconColor(isSel)
-			for _, m in ipairs(iconBox:GetChildren()) do
-				if m.Name == "IconMark" then
-					m.BackgroundColor3 = isSel and Theme.accent or Theme.textDim
-					local st = m:FindFirstChildOfClass("UIStroke")
-					if st then st.Color = isSel and Theme.accent or Theme.textDim end
-				end
-			end
 		end
 
 		local function select()
@@ -1761,6 +2027,89 @@ function Library.CreateWindow(opts)
 		return toast
 	end
 
+	-- ── Config ──────────────────────────────────────────────────────────
+	function window:SaveConfig(name)
+		name = tostring(name or "default")
+		if name == "" or name:find("[/\\%.%.]") then return false end
+		safeMkDir("Zentynal")
+		safeMkDir(CONFIG_DIR)
+		local data = {}
+		for flag, ctrl in pairs(self._flags) do
+			local ok, value = pcall(function() return ctrl:Get() end)
+			if ok then
+				if ctrl._kind == "colorpicker" and typeof(value) == "Color3" then
+					data[flag] = { type = "color3", value = colorToArray(value) }
+				elseif ctrl._kind == "keybind" then
+					data[flag] = { type = "keycode", value = keyToName(value) }
+				elseif ctrl._kind == "slider" or ctrl._kind == "toggle" then
+					data[flag] = { type = "number_bool", value = value }
+				else
+					data[flag] = { type = "raw", value = value }
+				end
+			end
+		end
+		local ok, encoded = pcall(function() return HttpService:JSONEncode({ flags = data, saved = os.time() }) end)
+		if not ok then return false end
+		local wok = safeWriteFile(CONFIG_DIR .. "/" .. name .. ".json", encoded)
+		if wok then
+			self:Notify({ Text = "Config saved: " .. name, Color = Theme.accent, Duration = 2 })
+		else
+			self:Notify({ Text = "Save failed (no writefile)", Color = Theme.rose, Duration = 3 })
+		end
+		return wok
+	end
+
+	function window:LoadConfig(name)
+		name = tostring(name or "default")
+		if name == "" or name:find("[/\\%.%.]") then return false end
+		local raw = safeReadFile(CONFIG_DIR .. "/" .. name .. ".json")
+		if not raw then
+			self:Notify({ Text = "Config not found: " .. name, Color = Theme.rose, Duration = 2 })
+			return false
+		end
+		local ok, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+		if not ok or type(decoded) ~= "table" or type(decoded.flags) ~= "table" then
+			self:Notify({ Text = "Config corrupt: " .. name, Color = Theme.rose, Duration = 2 })
+			return false
+		end
+		local applied = 0
+		for flag, entry in pairs(decoded.flags) do
+			local ctrl = self._flags[flag]
+			if ctrl and type(entry) == "table" and entry.value ~= nil then
+				local v = entry.value
+				if entry.type == "color3" then v = arrayToColor(v)
+				elseif entry.type == "keycode" then v = nameToKey(v) end
+				if v ~= nil then
+					pcall(function() ctrl:Set(v, true) end)
+					applied += 1
+				end
+			end
+		end
+		self:Notify({ Text = string.format("Loaded %d flag(s) from %s", applied, name), Color = Theme.accent, Duration = 2 })
+		return true
+	end
+
+	function window:ListConfigs()
+		if typeof(listfiles) ~= "function" then return {} end
+		local out = {}
+		for _, path in ipairs(safeListFiles(CONFIG_DIR)) do
+			local base = path:match("([^/\\]+)%.json$")
+			if base then table.insert(out, base) end
+		end
+		table.sort(out)
+		return out
+	end
+
+	function window:DeleteConfig(name)
+		name = tostring(name or "")
+		if name == "" then return false end
+		if safeIsFile(CONFIG_DIR .. "/" .. name .. ".json") then
+			safeDelFile(CONFIG_DIR .. "/" .. name .. ".json")
+			return true
+		end
+		return false
+	end
+
 	-- drag by brand row in sidebar
 	do
 		local dragging, dragStart, startPos = false, nil, nil
@@ -1845,6 +2194,14 @@ function Library.CreateWindow(opts)
 
 	table.insert(Library.Windows, window)
 	window:SetOpen(true)
+
+	task.spawn(function()
+		task.wait(0.35)
+		if screen and screen.Parent then
+			pcall(showPromo, screen)
+		end
+	end)
+
 	return window
 end
 
