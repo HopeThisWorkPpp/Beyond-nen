@@ -41,7 +41,11 @@ local neededNodes
 
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
 ENV["Zentynal Hub"] = ENV["Zentynal Hub"] or nil
-if ENV["Zentynal Hub"] and ENV["Zentynal Hub"].Destroy then pcall(ENV["Zentynal Hub"].Destroy) end
+local prevHub = rawget(ENV, "Zentynal Hub")
+if type(prevHub) == "table" and type(rawget(prevHub, "Destroy")) == "function" then
+    pcall(prevHub.Destroy)
+end
+ENV["Zentynal Hub"] = nil
 
 task.defer(function()
 	local ok, hui = pcall(function() return gethui() end)
