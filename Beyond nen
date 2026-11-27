@@ -114,16 +114,34 @@ if isFn(readfile) and isFn(isfile) then
 end
 
 if not lib then
-	local ok, res = pcall(function()
-		return game:HttpGet("https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua")
-	end)
-	if ok and type(res) == "string" then
-		lib = tryLoadLib(res, "github")
-	end
+    local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/refs/heads/main/ZentynalLib.lua"
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if ok and type(res) == "string" and #res > 1000 and not res:match("^%s*<") then
+        -- Looks like real Lua source, not an HTML 404 page
+        lib = tryLoadLib(res, "github")
+    else
+        warn("[Zentynal Hub] GitHub fetch failed or returned non-Lua content. Falling back to local file.")
+    end
 end
 
 if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib from GitHub or workspace.")
+    -- Last-chance local read before giving up
+    if isFn(readfile) and isFn(isfile) then
+        for _, p in ipairs({"ZentynalLib.lua", "QA Scripts/ZentynalLib.lua", "Zentynal Hub/ZentynalLib.lua"}) do
+            local okF, exists = pcall(isfile, p)
+            if okF and exists then
+                local okR, data = pcall(readfile, p)
+                if okR and type(data) == "string" and #data > 1000 then
+                    lib = tryLoadLib(data, "local:" .. p)
+                    if lib then break end
+                end
+            end
+        end
+    end
+end
+
+if not lib then
+    error("[Zentynal Hub] Failed to load ZentynalLib. Put ZentynalLib.lua next to this script, or verify the GitHub URL returns raw Lua.")
 end
 
 local window = lib.CreateWindow({
