@@ -1,5 +1,5 @@
 -- ZentynalLib.lua
--- Zentynal UI Library V9 (Search Highlight + Tab Transitions + Grid + Profile)
+-- Zentynal UI Library V9.1 (Fixed Grid Collapse)
 -- Drop-in for YourNenHub.
 
 local Players = game:GetService("Players")
@@ -524,7 +524,7 @@ local function createSection(host, title, registry, opts)
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
 		Size = opts.Size or UDim2.new(1, 0, 0, 0),
-		AutomaticSize = opts.Size and Enum.AutomaticSize.None or Enum.AutomaticSize.Y,
+		AutomaticSize = Enum.AutomaticSize.Y,
 	}, host)
 	corner(card, 16)
 	mk("UIGradient", {
@@ -1705,7 +1705,7 @@ function Library.CreateWindow(opts)
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 	}, sidebarNav)
 
-	-- Profile row (bottom of sidebar)
+	-- Profile row
 	local profileRow = mk("Frame", {
 		Name = "ProfileRow",
 		BackgroundTransparency = 1,
@@ -2028,8 +2028,9 @@ function Library.CreateWindow(opts)
 				AutomaticSize = Enum.AutomaticSize.Y,
 				LayoutOrder = #self._sections + 1,
 			}, scroll)
+			-- Using fixed height cells to prevent Roblox UIListLayout/UIGrid collapse bug
 			local gridLayout = mk("UIGridLayout", {
-				CellSize = UDim2.new(0.5, -6, 0, 0),
+				CellSize = UDim2.new(0.5, -6, 0, 180),
 				CellPadding = UDim2.new(0, 12, 0, 0),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				FillDirectionMaxCells = 2,
@@ -2037,8 +2038,8 @@ function Library.CreateWindow(opts)
 			local api2 = {}
 			function api2:Section(t)
 				local sec = createSection(gridFrame, t, window._flags)
-				sec.Instance.Size = UDim2.new(1, 0, 0, 0)
-				sec.Instance.AutomaticSize = Enum.AutomaticSize.Y
+				sec.Instance.Size = UDim2.new(1, 0, 1, 0)
+				sec.Instance.AutomaticSize = Enum.AutomaticSize.None
 				sec.Instance.LayoutOrder = #self._sections + 1
 				table.insert(self._sections, sec)
 				return sec
