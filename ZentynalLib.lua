@@ -15,26 +15,6 @@ local LIB_NAME = "Zentynal"
 local LOGO_ASSET = "rbxassetid://114884658309823"
 local LOGO_FILE = "Zentynal/logo.png"
 
--- ── THEME (Mint Green) ───────────────────────────────────────────────────
-local Theme = {
-	bg = Color3.fromRGB(10, 14, 12),
-	panel = Color3.fromRGB(16, 24, 20),
-	panelAlt = Color3.fromRGB(24, 36, 30),
-	sidebar = Color3.fromRGB(8, 12, 10),
-	stroke = Color3.fromRGB(40, 60, 50),
-	accent = Color3.fromRGB(52, 211, 153),
-	accentDim = Color3.fromRGB(16, 185, 129),
-	mint = Color3.fromRGB(52, 211, 153),
-	cyan = Color3.fromRGB(167, 243, 208),
-	rose = Color3.fromRGB(248, 113, 113),
-	text = Color3.fromRGB(240, 255, 248),
-	textDim = Color3.fromRGB(148, 176, 160),
-	off = Color3.fromRGB(34, 48, 40),
-	tabIdle = Color3.fromRGB(8, 12, 10),
-	tabHover = Color3.fromRGB(28, 44, 36),
-}
-
--- ── UTILITIES ────────────────────────────────────────────────────────────
 local function isCompact()
 	local cam = workspace.CurrentCamera
 	local vs = cam and cam.ViewportSize or Vector2.new(1280, 720)
@@ -58,6 +38,25 @@ local function pointer01(gui, input)
 	local size = gui.AbsoluteSize
 	return math.clamp((p.X - abs.X) / math.max(1, size.X), 0, 1), math.clamp((p.Y - abs.Y) / math.max(1, size.Y), 0, 1)
 end
+
+-- ── THEME (Mint Green) ───────────────────────────────────────────────────
+local Theme = {
+	bg = Color3.fromRGB(10, 14, 12),
+	panel = Color3.fromRGB(16, 24, 20),
+	panelAlt = Color3.fromRGB(24, 36, 30),
+	sidebar = Color3.fromRGB(8, 12, 10),
+	stroke = Color3.fromRGB(40, 60, 50),
+	accent = Color3.fromRGB(52, 211, 153),
+	accentDim = Color3.fromRGB(16, 185, 129),
+	mint = Color3.fromRGB(52, 211, 153),
+	cyan = Color3.fromRGB(167, 243, 208),
+	rose = Color3.fromRGB(248, 113, 113),
+	text = Color3.fromRGB(240, 255, 248),
+	textDim = Color3.fromRGB(148, 176, 160),
+	off = Color3.fromRGB(34, 48, 40),
+	tabIdle = Color3.fromRGB(8, 12, 10),
+	tabHover = Color3.fromRGB(28, 44, 36),
+}
 
 local function parentGui(gui)
 	local function protect(inst)
@@ -183,7 +182,7 @@ local function makeBrand(parent, size, z)
 	return wrap
 end
 
--- ── INPUT MANAGER (Memory Leak Fix) ──────────────────────────────────────
+-- ── INPUT MANAGER ────────────────────────────────────────────────────────
 local InputManager = {
 	activeDrag = nil,
 	connections = {},
