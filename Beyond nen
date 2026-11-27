@@ -100,7 +100,6 @@ local function tryLoadLib(source, label)
 	return nil
 end
 
--- 1. local workspace file
 if isFn(readfile) and isFn(isfile) then
 	for _, p in ipairs({"ZentynalLib.lua", "QA Scripts/ZentynalLib.lua", "Zentynal Hub/ZentynalLib.lua"}) do
 		local okF, exists = pcall(isfile, p)
@@ -114,7 +113,6 @@ if isFn(readfile) and isFn(isfile) then
 	end
 end
 
--- 2. GitHub fallback
 if not lib then
 	local ok, res = pcall(function()
 		return game:HttpGet("https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua")
@@ -1948,409 +1946,406 @@ task.spawn(function()
 	end
 end)
 
-task.delay(0.5, function()
-	-- ── Home (dashboard grid) ────────────────────────────────────────────
-	local tHome = window:AddTab("Home", "home")
-	local gHome = tHome:AddGrid()
-	local sAbout = gHome:Section("About")
-	sAbout:Label("Version v3.0.0")
-	sAbout:Label("Updated 2026-11-25")
-	sAbout:Label("Status Rewrite")
+-- Build tabs instantly (no task.delay) so grid renders correctly
+local tHome = window:AddTab("Home", "home")
+local gHome = tHome:AddGrid()
+local sAbout = gHome:Section("About")
+sAbout:Label("Version v3.0.0")
+sAbout:Label("Updated 2026-11-25")
+sAbout:Label("Status Rewrite")
 
-	local sUpdates = gHome:Section("Latest Updates")
-	sUpdates:Label("Changelog v3.0.0")
-	sUpdates:Label("· Rebuilt from the ground up for the latest version")
-	sUpdates:Label("· Auto Mine stands beside rocks instead of hiding under them")
-	sUpdates:Label("· Travel walks the real route at full speed")
+local sUpdates = gHome:Section("Latest Updates")
+sUpdates:Label("Changelog v3.0.0")
+sUpdates:Label("· Rebuilt from the ground up for the latest version")
+sUpdates:Label("· Auto Mine stands beside rocks instead of hiding under them")
+sUpdates:Label("· Travel walks the real route at full speed")
 
-	local gExec = tHome:AddGrid()
-	local sExec = gExec:Section("Executor")
-	sExec:Label("Executor: Delta")
-	local sStatus = gExec:Section("Status")
-	sStatus:Label("Client FPS: live")
-	sStatus:Label("Server ping: live")
+local gExec = tHome:AddGrid()
+local sExec = gExec:Section("Executor")
+sExec:Label("Executor: Delta")
+local sStatus = gExec:Section("Status")
+sStatus:Label("Client FPS: live")
+sStatus:Label("Server ping: live")
 
-	-- ── Core tabs ────────────────────────────────────────────────────────
-	local tPlayer = window:AddTab("Player", "player")
-	local tCombat = window:AddTab("Combat", "combat")
-	local tFarm = window:AddTab("Farm", "farm")
-	local tGather = window:AddTab("Gathering", "gathering")
-	local tLoot = window:AddTab("Loot", "loot")
-	local tExam = window:AddTab("Exam", "exam")
-	local tProg = window:AddTab("Progression", "progression")
-	local tTP = window:AddTab("Teleport", "teleport")
-	local tVis = window:AddTab("Visuals", "visuals")
-	local tSet = window:AddTab("Settings", "settings")
+local tPlayer = window:AddTab("Player", "player")
+local tCombat = window:AddTab("Combat", "combat")
+local tFarm = window:AddTab("Farm", "farm")
+local tGather = window:AddTab("Gathering", "gathering")
+local tLoot = window:AddTab("Loot", "loot")
+local tExam = window:AddTab("Exam", "exam")
+local tProg = window:AddTab("Progression", "progression")
+local tTP = window:AddTab("Teleport", "teleport")
+local tVis = window:AddTab("Visuals", "visuals")
+local tSet = window:AddTab("Settings", "settings")
 
-	window:SelectTab("Home")
+window:SelectTab("Home")
 
-	local sMove = tPlayer:Section("Movement")
-	C.noclip = sMove:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
-	C.fly = sMove:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
-	C.flySpeed = sMove:Slider({Text="Fly Speed", Min=20, Max=150, Default=60, Callback=function(v) flySpeed=v end})
-	C.infJump = sMove:Toggle({Text="Infinite Jump", Default=false, Callback=function(v) infJumpOn=v end})
-	C.clickTP = sMove:Toggle({Text="Click TP", Default=false, Callback=function(v) clickTPOn=v end})
-	C.ws = sMove:Toggle({Text="WalkSpeed", Default=false, Callback=function(v) wsOn=v end})
-	C.wsVal = sMove:Slider({Text="WalkSpeed Value", Min=16, Max=120, Default=40, Callback=function(v) wsVal=v end})
+local sMove = tPlayer:Section("Movement")
+C.noclip = sMove:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
+C.fly = sMove:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
+C.flySpeed = sMove:Slider({Text="Fly Speed", Min=20, Max=150, Default=60, Callback=function(v) flySpeed=v end})
+C.infJump = sMove:Toggle({Text="Infinite Jump", Default=false, Callback=function(v) infJumpOn=v end})
+C.clickTP = sMove:Toggle({Text="Click TP", Default=false, Callback=function(v) clickTPOn=v end})
+C.ws = sMove:Toggle({Text="WalkSpeed", Default=false, Callback=function(v) wsOn=v end})
+C.wsVal = sMove:Slider({Text="WalkSpeed Value", Min=16, Max=120, Default=40, Callback=function(v) wsVal=v end})
 
-	local sUtil = tPlayer:Section("Utility")
-	C.antiAFK = sUtil:Toggle({Text="Anti-AFK", Default=false, Callback=function(v) setAntiAFK(v) end})
-	C.alert = sUtil:Toggle({Text="Player Alert", Default=false, Callback=function(v) alertOn=v end})
-	sUtil:Button({Text="AFK Chamber", Callback=function()
-		local ok,res = callSvc("AfkTransferService","RequestAfkTransfer")
-		notify("AFK transfer: " .. tostring(res or ok))
-	end})
-	sUtil:Button({Text="Respawn", Callback=function() callSvc("DeathService","Respawn") end})
+local sUtil = tPlayer:Section("Utility")
+C.antiAFK = sUtil:Toggle({Text="Anti-AFK", Default=false, Callback=function(v) setAntiAFK(v) end})
+C.alert = sUtil:Toggle({Text="Player Alert", Default=false, Callback=function(v) alertOn=v end})
+sUtil:Button({Text="AFK Chamber", Callback=function()
+	local ok,res = callSvc("AfkTransferService","RequestAfkTransfer")
+	notify("AFK transfer: " .. tostring(res or ok))
+end})
+sUtil:Button({Text="Respawn", Callback=function() callSvc("DeathService","Respawn") end})
 
-	local sCombat = tCombat:Section("Combat")
-	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
-	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
-	C.parryRange = sCombat:Slider({Text="Parry Range", Min=8, Max=30, Default=16, Callback=function(v) parryRange=v end})
-	C.parryDelay = sCombat:Slider({Text="Parry Timing", Min=20, Max=60, Default=32, Callback=function(v) parryDelay=v/100 end})
-	C.skills = sCombat:Toggle({Text="Auto Skills", Default=false, Callback=function(v) skillOn=v end})
-	C.grip = sCombat:Toggle({Text="Auto Grip", Default=false, Callback=function(v) gripOn=v end})
+local sCombat = tCombat:Section("Combat")
+C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
+C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
+C.parryRange = sCombat:Slider({Text="Parry Range", Min=8, Max=30, Default=16, Callback=function(v) parryRange=v end})
+C.parryDelay = sCombat:Slider({Text="Parry Timing", Min=20, Max=60, Default=32, Callback=function(v) parryDelay=v/100 end})
+C.skills = sCombat:Toggle({Text="Auto Skills", Default=false, Callback=function(v) skillOn=v end})
+C.grip = sCombat:Toggle({Text="Auto Grip", Default=false, Callback=function(v) gripOn=v end})
 
-	local sWeap = tCombat:Section("Weapon")
-	local wNames, wByName = {}, {}
-	for _, w in pairs(weapons()) do
-		local lbl = w.name .. " (" .. w.dmg .. " dmg)"
-		wNames[#wNames+1] = lbl; wByName[lbl] = w
-	end
-	if #wNames == 0 then wNames = {"Fists"} end
-	C.weaponByName = wByName
-	C.weapon = sWeap:Dropdown({Text="Weapon", Options=wNames, Default=wNames[1], Callback=function(v)
-		local w = wByName[v]
-		if w then weaponChoice = w.name end
-	end})
-	C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
+local sWeap = tCombat:Section("Weapon")
+local wNames, wByName = {}, {}
+for _, w in pairs(weapons()) do
+	local lbl = w.name .. " (" .. w.dmg .. " dmg)"
+	wNames[#wNames+1] = lbl; wByName[lbl] = w
+end
+if #wNames == 0 then wNames = {"Fists"} end
+C.weaponByName = wByName
+C.weapon = sWeap:Dropdown({Text="Weapon", Options=wNames, Default=wNames[1], Callback=function(v)
+	local w = wByName[v]
+	if w then weaponChoice = w.name end
+end})
+C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
 
-	local s4 = tFarm:Section("Auto Farm")
-	C.farmTarget = s4:Dropdown({Text="Target", Options=MOB_LIST, Default="Forest Brawler", Callback=function(v) farmTarget=v end})
-	s4:Button({Text="Refresh Mob List", Callback=function()
-		if C.farmTarget.SetOptions then C.farmTarget:SetOptions(mobNames()) end
-		notify("Mob list refreshed")
-	end})
-	C.farmPos = s4:Dropdown({Text="Position", Options={"Above","Behind","Below"}, Default="Above", Callback=function(v)
-		farmPos=v
-		if v=="Below" and C.farmFloat then C.farmFloat:Set(true) end
-	end})
-	C.farmDist = s4:Slider({Text="Distance", Min=3, Max=40, Default=8, Callback=function(v) farmDist=v end})
-	C.farmYOff = s4:Slider({Text="Y Offset", Min=-15, Max=30, Default=0, Callback=function(v) farmYOff=v end})
-	C.farmFloat = s4:Toggle({Text="Float", Default=true, Callback=function(v) farmFloat=v end})
-	C.farm = s4:Toggle({Text="Auto Farm", Default=false, Callback=function(v)
-		farmOn=v auraOn=v
-		if C.aura then C.aura:Set(v) end
-		notify(v and ("Farming " .. farmTarget) or "Farm off")
-	end})
-	C.farmDodge = s4:Toggle({Text="Dodge Swings", Default=true, Callback=function(v) farmDodge=v end})
+local s4 = tFarm:Section("Auto Farm")
+C.farmTarget = s4:Dropdown({Text="Target", Options=MOB_LIST, Default="Forest Brawler", Callback=function(v) farmTarget=v end})
+s4:Button({Text="Refresh Mob List", Callback=function()
+	if C.farmTarget.SetOptions then C.farmTarget:SetOptions(mobNames()) end
+	notify("Mob list refreshed")
+end})
+C.farmPos = s4:Dropdown({Text="Position", Options={"Above","Behind","Below"}, Default="Above", Callback=function(v)
+	farmPos=v
+	if v=="Below" and C.farmFloat then C.farmFloat:Set(true) end
+end})
+C.farmDist = s4:Slider({Text="Distance", Min=3, Max=40, Default=8, Callback=function(v) farmDist=v end})
+C.farmYOff = s4:Slider({Text="Y Offset", Min=-15, Max=30, Default=0, Callback=function(v) farmYOff=v end})
+C.farmFloat = s4:Toggle({Text="Float", Default=true, Callback=function(v) farmFloat=v end})
+C.farm = s4:Toggle({Text="Auto Farm", Default=false, Callback=function(v)
+	farmOn=v auraOn=v
+	if C.aura then C.aura:Set(v) end
+	notify(v and ("Farming " .. farmTarget) or "Farm off")
+end})
+C.farmDodge = s4:Toggle({Text="Dodge Swings", Default=true, Callback=function(v) farmDodge=v end})
 
-	local s4c = tFarm:Section("Farmable Bosses")
-	C.boss = s4c:Toggle({Text="Auto Boss (any alive)", Default=false, Callback=function(v) bossOn=v end})
-	for _, bn in ipairs(BOSS_SEED) do
-		C["boss_" .. bn] = s4c:Toggle({Text=bn, Default=true, Callback=function(v) bossEnabled[bn] = v end})
-	end
+local s4c = tFarm:Section("Farmable Bosses")
+C.boss = s4c:Toggle({Text="Auto Boss (any alive)", Default=false, Callback=function(v) bossOn=v end})
+for _, bn in ipairs(BOSS_SEED) do
+	C["boss_" .. bn] = s4c:Toggle({Text=bn, Default=true, Callback=function(v) bossEnabled[bn] = v end})
+end
 
-	local s4b = tFarm:Section("Auto Quest")
-	C.quest = s4b:Dropdown({Text="Quest", Options=QUEST_OPTIONS, Default=QUEST_OPTIONS[1], Callback=function(v) questId=QUEST_BY_LABEL[v] or v end})
-	s4b:TextBox({Text="Custom Quest Id", Placeholder="e.g. KillMoleRat", Callback=function(v) if #v>0 then questId=v end end})
-	C.autoQuest = s4b:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
+local s4b = tFarm:Section("Auto Quest")
+C.quest = s4b:Dropdown({Text="Quest", Options=QUEST_OPTIONS, Default=QUEST_OPTIONS[1], Callback=function(v) questId=QUEST_BY_LABEL[v] or v end})
+s4b:TextBox({Text="Custom Quest Id", Placeholder="e.g. KillMoleRat", Callback=function(v) if #v>0 then questId=v end end})
+C.autoQuest = s4b:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
 
-	local sG1 = tGather:Section("Auto Mine")
-	C.mine = sG1:Toggle({Text="Auto Mine", Default=false, Callback=function(v) mineOn=v end})
-	C.minePri1 = sG1:Dropdown({Text="Priority 1", Options=ORE_LIST, Default="None", Callback=function(v) minePri1=v end})
-	C.minePri2 = sG1:Dropdown({Text="Priority 2", Options=ORE_LIST, Default="None", Callback=function(v) minePri2=v end})
+local sG1 = tGather:Section("Auto Mine")
+C.mine = sG1:Toggle({Text="Auto Mine", Default=false, Callback=function(v) mineOn=v end})
+C.minePri1 = sG1:Dropdown({Text="Priority 1", Options=ORE_LIST, Default="None", Callback=function(v) minePri1=v end})
+C.minePri2 = sG1:Dropdown({Text="Priority 2", Options=ORE_LIST, Default="None", Callback=function(v) minePri2=v end})
 
-	local sG2 = tGather:Section("Auto Fish")
-	C.fish = sG2:Toggle({Text="Auto Fish", Default=false, Callback=function(v) fishOn=v end})
+local sG2 = tGather:Section("Auto Fish")
+C.fish = sG2:Toggle({Text="Auto Fish", Default=false, Callback=function(v) fishOn=v end})
 
-	local sG3 = tGather:Section("Auto Sell")
-	C.autoSell = sG3:Toggle({Text="Auto Sell Ores", Default=false, Callback=function(v) autoSellOn=v end})
-	sG3:Label("Sells mined ores at the Ores Merchant every 20s. Keeps crystals by default.")
-	for _, ore in ipairs({"Nen Crystal","Ocean Crystal","Ruby Crystal","Charged Crystal","Fire Essence"}) do
-		autoSellKeep[ore] = true
-	end
-	sG3:Button({Text="Sell Ores Now", Callback=function()
-		task.spawn(function()
-			local gained = sellOresOnce()
-			notify(gained > 0 and ("Sold +" .. gained .. " Jenni") or "Nothing sold")
-		end)
-	end})
+local sG3 = tGather:Section("Auto Sell")
+C.autoSell = sG3:Toggle({Text="Auto Sell Ores", Default=false, Callback=function(v) autoSellOn=v end})
+sG3:Label("Sells mined ores at the Ores Merchant every 20s. Keeps crystals by default.")
+for _, ore in ipairs({"Nen Crystal","Ocean Crystal","Ruby Crystal","Charged Crystal","Fire Essence"}) do
+	autoSellKeep[ore] = true
+end
+sG3:Button({Text="Sell Ores Now", Callback=function()
+	task.spawn(function()
+		local gained = sellOresOnce()
+		notify(gained > 0 and ("Sold +" .. gained .. " Jenni") or "Nothing sold")
+	end)
+end})
 
-	local sL1 = tLoot:Section("Chests")
-	C.chests = sL1:Toggle({Text="Auto Chests", Default=false, Callback=function(v) chestOn=v end})
+local sL1 = tLoot:Section("Chests")
+C.chests = sL1:Toggle({Text="Auto Chests", Default=false, Callback=function(v) chestOn=v end})
 
-	local sL2 = tLoot:Section("Merchant")
-	local buyChoice = "Meditation Mat"
-	sL2:Dropdown({Text="Item", Options={"Meditation Mat","PickAxe","Super PickAxe","Kettle"}, Default="Meditation Mat", Callback=function(v) buyChoice=v end})
-	sL2:Button({Text="Buy at Merchant", Callback=function()
-		task.spawn(function()
-			local j0 = lp:GetAttribute("Jenni") or 0
-			local npc = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("MerchantStore")
-			npc = npc and npc:FindFirstChild("Merchant") or (workspace.World and workspace.World:FindFirstChild("Merchant", true))
-			if not npc then notify("Merchant model not found") return end
-			local bp = npc:GetPivot().Position
-			if char() then char():PivotTo(CFrame.new(bp + Vector3.new(0, 0, 4))) end
-			task.wait(0.6)
-			local pp = npc:FindFirstChildWhichIsA("ProximityPrompt", true)
-			if pp then pcall(function() firePP(pp) end) end
-			task.wait(0.8)
-			callSvc("MerchantService", "purchase", buyChoice)
-			task.wait(0.6)
-			local j1 = lp:GetAttribute("Jenni") or 0
-			notify(j1 < j0 and ("Bought " .. buyChoice .. " (-" .. (j0 - j1) .. " Jenni)") or "Purchase rejected")
-		end)
-	end})
+local sL2 = tLoot:Section("Merchant")
+local buyChoice = "Meditation Mat"
+sL2:Dropdown({Text="Item", Options={"Meditation Mat","PickAxe","Super PickAxe","Kettle"}, Default="Meditation Mat", Callback=function(v) buyChoice=v end})
+sL2:Button({Text="Buy at Merchant", Callback=function()
+	task.spawn(function()
+		local j0 = lp:GetAttribute("Jenni") or 0
+		local npc = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("MerchantStore")
+		npc = npc and npc:FindFirstChild("Merchant") or (workspace.World and workspace.World:FindFirstChild("Merchant", true))
+		if not npc then notify("Merchant model not found") return end
+		local bp = npc:GetPivot().Position
+		if char() then char():PivotTo(CFrame.new(bp + Vector3.new(0, 0, 4))) end
+		task.wait(0.6)
+		local pp = npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+		if pp then pcall(function() firePP(pp) end) end
+		task.wait(0.8)
+		callSvc("MerchantService", "purchase", buyChoice)
+		task.wait(0.6)
+		local j1 = lp:GetAttribute("Jenni") or 0
+		notify(j1 < j0 and ("Bought " .. buyChoice .. " (-" .. (j0 - j1) .. " Jenni)") or "Purchase rejected")
+	end)
+end})
 
-	local sE1 = tExam:Section("Hunter Exam")
-	C.exam = sE1:Toggle({Text="Auto Exam (Only First/2nd Stage)", Default=false, Callback=function(v)
-		autoExamOn=v
-		if not v then unpinnedExamSpeed() setSprint(false) end
-		notify(v and "Auto Exam ON — stages 1-2, walks, no teleports" or "Auto Exam off")
-	end})
-	C.examSpeed = sE1:Slider({Text="Exam Speed", Min=16, Max=50, Default=40, Callback=function(v) examSpeed=v end})
-	C.examFight = sE1:Toggle({Text="Fight Mobs (stage 2+)", Default=true, Callback=function(v) examFightMobs=v end})
-	sE1:Button({Text="Exam Status", Callback=function()
-		local st = workspace:GetAttribute("stage")
-		local pts = lp:GetAttribute("HunterExamPoints")
-		local t = workspace:GetAttribute("timer")
-		notify("Stage " .. tostring(st) .. " | pts " .. tostring(pts) .. " | timer " .. tostring(t))
-	end})
-	sE1:Button({Text="Get Up Now", Callback=function() task.spawn(examGetup, lastPromptId) end})
+local sE1 = tExam:Section("Hunter Exam")
+C.exam = sE1:Toggle({Text="Auto Exam (Only First/2nd Stage)", Default=false, Callback=function(v)
+	autoExamOn=v
+	if not v then unpinnedExamSpeed() setSprint(false) end
+	notify(v and "Auto Exam ON — stages 1-2, walks, no teleports" or "Auto Exam off")
+end})
+C.examSpeed = sE1:Slider({Text="Exam Speed", Min=16, Max=50, Default=40, Callback=function(v) examSpeed=v end})
+C.examFight = sE1:Toggle({Text="Fight Mobs (stage 2+)", Default=true, Callback=function(v) examFightMobs=v end})
+sE1:Button({Text="Exam Status", Callback=function()
+	local st = workspace:GetAttribute("stage")
+	local pts = lp:GetAttribute("HunterExamPoints")
+	local t = workspace:GetAttribute("timer")
+	notify("Stage " .. tostring(st) .. " | pts " .. tostring(pts) .. " | timer " .. tostring(t))
+end})
+sE1:Button({Text="Get Up Now", Callback=function() task.spawn(examGetup, lastPromptId) end})
 
-	local sM = tProg:Section("Meditation")
-	C.meditate = sM:Toggle({Text="Auto Meditate", Default=false, Callback=function(v) medOn=v end})
+local sM = tProg:Section("Meditation")
+C.meditate = sM:Toggle({Text="Auto Meditate", Default=false, Callback=function(v) medOn=v end})
 
-	local s3s = tProg:Section("Stat Points")
-	C.statChoice = s3s:Dropdown({Text="Stat", Options={"StrengthStat","StaminaStat","DurabilityStat"}, Default="StrengthStat", Callback=function(v) statChoice=v end})
-	C.autoStats = s3s:Toggle({Text="Auto Points", Default=false, Callback=function(v) autoStatsOn=v end})
+local s3s = tProg:Section("Stat Points")
+C.statChoice = s3s:Dropdown({Text="Stat", Options={"StrengthStat","StaminaStat","DurabilityStat"}, Default="StrengthStat", Callback=function(v) statChoice=v end})
+C.autoStats = s3s:Toggle({Text="Auto Points", Default=false, Callback=function(v) autoStatsOn=v end})
 
-	local s3b = tProg:Section("Talent Cards")
-	C.talentAuto = s3b:Toggle({Text="Auto-Pick Best Card", Default=false, Callback=function(v) talentOn=v end})
-	C.talentMin = s3b:Dropdown({Text="Reroll Until", Options={"Uncommon","Rare","Special","Legendary","Mythical","Extraordinary"}, Default="Rare", Callback=function(v) talentMin=v end})
-	C.talentReroll = s3b:Toggle({Text="Auto Reroll", Default=false, Callback=function(v) talentReroll=v end})
+local s3b = tProg:Section("Talent Cards")
+C.talentAuto = s3b:Toggle({Text="Auto-Pick Best Card", Default=false, Callback=function(v) talentOn=v end})
+C.talentMin = s3b:Dropdown({Text="Reroll Until", Options={"Uncommon","Rare","Special","Legendary","Mythical","Extraordinary"}, Default="Rare", Callback=function(v) talentMin=v end})
+C.talentReroll = s3b:Toggle({Text="Auto Reroll", Default=false, Callback=function(v) talentReroll=v end})
 
-	local sT2 = tTP:Section("Quest Targets")
-	sT2:Button({Text="TP to Quest Objective", Callback=function()
-		local aq = activeQuests()
-		local p = hrp() and hrp().Position or Vector3.new()
-		if aq then
-			for _, q in pairs(aq:GetChildren()) do
-				local mob = questMob(q.Name)
-				if mob then
-					local best, bd = nil, math.huge
-					for _, m in pairs(workspace:GetChildren()) do
-						if m:IsA("Model") and m.Name == mob and (m:GetAttribute("Health") or 0) > 0 then
-							local d = (m:GetPivot().Position - p).Magnitude
-							if d < bd then bd, best = d, m end
-						end
+local sT2 = tTP:Section("Quest Targets")
+sT2:Button({Text="TP to Quest Objective", Callback=function()
+	local aq = activeQuests()
+	local p = hrp() and hrp().Position or Vector3.new()
+	if aq then
+		for _, q in pairs(aq:GetChildren()) do
+			local mob = questMob(q.Name)
+			if mob then
+				local best, bd = nil, math.huge
+				for _, m in pairs(workspace:GetChildren()) do
+					if m:IsA("Model") and m.Name == mob and (m:GetAttribute("Health") or 0) > 0 then
+						local d = (m:GetPivot().Position - p).Magnitude
+						if d < bd then bd, best = d, m end
 					end
-					if best and char() then
-						char():PivotTo(CFrame.new(best:GetPivot().Position + Vector3.new(0, 0, 8)))
-						notify("TP → " .. mob)
-						return
-					end
+				end
+				if best and char() then
+					char():PivotTo(CFrame.new(best:GetPivot().Position + Vector3.new(0, 0, 8)))
+					notify("TP → " .. mob)
+					return
 				end
 			end
 		end
-		notify("No active kill-quest target found")
-	end})
-	sT2:Button({Text="TP to Quest Board", Callback=function()
-		local b = findBoard(questId)
-		if not b then
-			local qb = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("Quest Boards")
-			b = qb and qb:GetChildren()[1]
-		end
-		if b and char() then
-			char():PivotTo(b:GetPivot() + Vector3.new(0, 0, 4))
-			notify("TP → quest board")
-		else
-			notify("No quest board found")
-		end
-	end})
-	local sTN = tTP:Section("Node Master")
-	C.nodeMaster = sTN:Toggle({Text="Auto Node Master", Default=false, Callback=function(v) nodeMasterOn=v end})
-	sTN:Button({Text="Go to Node Master", Callback=function()
-		task.spawn(function()
-			local ok = doNodeMaster()
-			notify(ok and "Node Master visited" or "No Node Master spawned right now")
-		end)
-	end})
-	sTN:Button({Text="Track Master", Callback=function()
-		local ok, res = callSvc("NenService", "track_master")
-		local pos = workspace:GetAttribute("NodeMasterPosition")
-		notify("Node Master: " .. tostring(workspace:GetAttribute("NodeMasterName")) .. " @ " .. tostring(pos))
-	end})
-	C.sniper = sTN:Toggle({Text="Auto Node Sniper (server hop)", Default=false, Callback=function(v)
-		sniperOn=v
-		notify(v and "Node Sniper ON" or "Node Sniper off")
-	end})
-	sTN:Button({Text="Sniper Status", Callback=function()
-		local need = neededNodes()
-		local t = {}
-		for n in pairs(need) do t[#t+1] = "#"..n end
-		table.sort(t)
-		notify(#t > 0 and ("Nodes needed: " .. table.concat(t, ", ")) or "All aura nodes handled")
-	end})
-	sTN:Button({Text="Nen Unlock (TP to Rohan)", Callback=function()
-		task.spawn(function()
-			local npc = workspace:FindFirstChild("Humanoids") and workspace.Humanoids:FindFirstChild("Mntzrmh")
-			local pos = npc and npc:GetPivot().Position or Vector3.new(-4341, 426, -915)
-			local r = hrp()
-			if r then r.CFrame = CFrame.new(pos + Vector3.new(0, 3, 4)) notify("Nen Master — interact to unlock") end
-		end)
-	end})
-
-	local sT3 = tTP:Section("NPCs")
-	local npcNames, npcLookup = {}, {}
-	do
-		local w = workspace:FindFirstChild("World")
-		local seen = {}
-		local function add(c, prefix)
-			if c and c:IsA("Model") and not seen[c.Name] then
-				seen[c.Name] = true
-				npcLookup[(prefix or "") .. c.Name] = c
-				npcNames[#npcNames + 1] = (prefix or "") .. c.Name
-			end
-		end
-		for _, g in ipairs({ "BetterDialogNpcs", "QuestReceivers", "CraftingNpcs", "BountyAppraiserNpcs", "Quests", "MerchantStore" }) do
-			local f = w and w:FindFirstChild(g)
-			for _, c in pairs(f and f:GetChildren() or {}) do add(c) end
-		end
-		local nen = w and w:FindFirstChild("Nen")
-		for _, c in pairs(nen and nen:GetChildren() or {}) do add(c) end
-		local sellers = nen and nen:FindFirstChild("sellers")
-		for _, c in pairs(sellers and sellers:GetChildren() or {}) do add(c, "Seller: ") end
-		table.sort(npcNames)
 	end
-	local npcChoice = npcNames[1]
-	sT3:Dropdown({Text="NPC", Options=npcNames, Default=npcNames[1], Callback=function(v) npcChoice=v end})
-	sT3:Button({Text="TP to NPC", Callback=function()
-		local npc = npcLookup[npcChoice]
-		if not (npc and npc.Parent) then
-			for _, d in pairs(workspace:GetDescendants()) do
-				if d:IsA("Model") and d.Name == npcChoice:gsub("^Seller: ", "") then npc = d break end
-			end
-		end
-		if npc and npc.Parent and char() then
-			char():PivotTo(npc:GetPivot() + Vector3.new(0, 0, 4))
-			notify("TP → " .. npcChoice)
-		else
-			notify("NPC not found: " .. tostring(npcChoice))
-		end
-	end})
-
-	local sT4 = tTP:Section("Locations")
-	local locNames, locLookup = {}, {}
-	do
-		local w = workspace:FindFirstChild("World")
-		local sp = workspace:FindFirstChildOfClass("SpawnLocation")
-		if sp then locLookup["Spawn"] = sp locNames[#locNames + 1] = "Spawn" end
-		local ml = w and w:FindFirstChild("Map") and w.Map:FindFirstChild("Map Locations")
-		for _, c in pairs(ml and ml:GetChildren() or {}) do
-			local p = c:IsA("BasePart") and c.Position or (c:IsA("Model") and c:GetPivot().Position)
-			if p and p.Magnitude > 1 and not locLookup[c.Name] then
-				locLookup[c.Name] = c
-				locNames[#locNames + 1] = c.Name
-			end
-		end
-		local qb = w and w:FindFirstChild("Quest Boards")
-		for _, c in pairs(qb and qb:GetChildren() or {}) do
-			local n = "Board: " .. c.Name
-			locLookup[n] = c
-			locNames[#locNames + 1] = n
-		end
-		local mg = w and w:FindFirstChild("Map") and w.Map:FindFirstChild("Mine")
-		locLookup["Mines Entrance"] = mg or (qb and qb:FindFirstChild("Mines Quest Board"))
-		if locLookup["Mines Entrance"] then locNames[#locNames + 1] = "Mines Entrance" end
-		table.sort(locNames)
+	notify("No active kill-quest target found")
+end})
+sT2:Button({Text="TP to Quest Board", Callback=function()
+	local b = findBoard(questId)
+	if not b then
+		local qb = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("Quest Boards")
+		b = qb and qb:GetChildren()[1]
 	end
-	local locChoice = locNames[1]
-	sT4:Dropdown({Text="Location", Options=locNames, Default=locNames[1], Callback=function(v) locChoice=v end})
-	sT4:Button({Text="TP to Location", Callback=function()
-		local t = locLookup[locChoice]
-		if not (t and t.Parent) then notify("Location gone: " .. tostring(locChoice)) return end
-		local cf = t:IsA("BasePart") and t.CFrame or t:GetPivot()
-		if char() then char():PivotTo(cf + Vector3.new(0, 5, 0)) notify("TP → " .. locChoice) end
-	end})
-	sT4:Button({Text="Teleport to Spawn", Callback=function()
-		local sp = workspace:FindFirstChildOfClass("SpawnLocation")
-		if sp then moveTo(sp.CFrame + Vector3.new(0,5,0)) notify("Teleported to spawn") end
-	end})
+	if b and char() then
+		char():PivotTo(b:GetPivot() + Vector3.new(0, 0, 4))
+		notify("TP → quest board")
+	else
+		notify("No quest board found")
+	end
+end})
+local sTN = tTP:Section("Node Master")
+C.nodeMaster = sTN:Toggle({Text="Auto Node Master", Default=false, Callback=function(v) nodeMasterOn=v end})
+sTN:Button({Text="Go to Node Master", Callback=function()
+	task.spawn(function()
+		local ok = doNodeMaster()
+		notify(ok and "Node Master visited" or "No Node Master spawned right now")
+	end)
+end})
+sTN:Button({Text="Track Master", Callback=function()
+	local ok, res = callSvc("NenService", "track_master")
+	local pos = workspace:GetAttribute("NodeMasterPosition")
+	notify("Node Master: " .. tostring(workspace:GetAttribute("NodeMasterName")) .. " @ " .. tostring(pos))
+end})
+C.sniper = sTN:Toggle({Text="Auto Node Sniper (server hop)", Default=false, Callback=function(v)
+	sniperOn=v
+	notify(v and "Node Sniper ON" or "Node Sniper off")
+end})
+sTN:Button({Text="Sniper Status", Callback=function()
+	local need = neededNodes()
+	local t = {}
+	for n in pairs(need) do t[#t+1] = "#"..n end
+	table.sort(t)
+	notify(#t > 0 and ("Nodes needed: " .. table.concat(t, ", ")) or "All aura nodes handled")
+end})
+sTN:Button({Text="Nen Unlock (TP to Rohan)", Callback=function()
+	task.spawn(function()
+		local npc = workspace:FindFirstChild("Humanoids") and workspace.Humanoids:FindFirstChild("Mntzrmh")
+		local pos = npc and npc:GetPivot().Position or Vector3.new(-4341, 426, -915)
+		local r = hrp()
+		if r then r.CFrame = CFrame.new(pos + Vector3.new(0, 3, 4)) notify("Nen Master — interact to unlock") end
+	end)
+end})
 
-	local sT5 = tTP:Section("Servers")
-	sT5:Button({Text="Server Hop (quick)", Callback=function()
-		notify("Quick-joining...")
-		callSvc("ServersService", "quick_join")
-	end})
-	sT5:Button({Text="Join Emptiest Server", Callback=function()
-		notify("Scanning servers...")
-		task.spawn(function()
-			local best, pages = nil, 0
-			for page = 1, 10 do
-				local ok, res = callSvc("ServersService", "list_servers", page, "")
-				if not ok or type(res) ~= "table" or res.ok ~= true then break end
-				pages = page
-				for _, s in pairs(res.servers or {}) do
-					if s.server_id ~= game.JobId and (s.players or 99) < (s.max_players or 0)
-						and (not best or s.players < best.players) then
-						best = s
-					end
+local sT3 = tTP:Section("NPCs")
+local npcNames, npcLookup = {}, {}
+do
+	local w = workspace:FindFirstChild("World")
+	local seen = {}
+	local function add(c, prefix)
+		if c and c:IsA("Model") and not seen[c.Name] then
+			seen[c.Name] = true
+			npcLookup[(prefix or "") .. c.Name] = c
+			npcNames[#npcNames + 1] = (prefix or "") .. c.Name
+		end
+	end
+	for _, g in ipairs({ "BetterDialogNpcs", "QuestReceivers", "CraftingNpcs", "BountyAppraiserNpcs", "Quests", "MerchantStore" }) do
+		local f = w and w:FindFirstChild(g)
+		for _, c in pairs(f and f:GetChildren() or {}) do add(c) end
+	end
+	local nen = w and w:FindFirstChild("Nen")
+	for _, c in pairs(nen and nen:GetChildren() or {}) do add(c) end
+	local sellers = nen and nen:FindFirstChild("sellers")
+	for _, c in pairs(sellers and sellers:GetChildren() or {}) do add(c, "Seller: ") end
+	table.sort(npcNames)
+end
+local npcChoice = npcNames[1]
+sT3:Dropdown({Text="NPC", Options=npcNames, Default=npcNames[1], Callback=function(v) npcChoice=v end})
+sT3:Button({Text="TP to NPC", Callback=function()
+	local npc = npcLookup[npcChoice]
+	if not (npc and npc.Parent) then
+		for _, d in pairs(workspace:GetDescendants()) do
+			if d:IsA("Model") and d.Name == npcChoice:gsub("^Seller: ", "") then npc = d break end
+		end
+	end
+	if npc and npc.Parent and char() then
+		char():PivotTo(npc:GetPivot() + Vector3.new(0, 0, 4))
+		notify("TP → " .. npcChoice)
+	else
+		notify("NPC not found: " .. tostring(npcChoice))
+	end
+end})
+
+local sT4 = tTP:Section("Locations")
+local locNames, locLookup = {}, {}
+do
+	local w = workspace:FindFirstChild("World")
+	local sp = workspace:FindFirstChildOfClass("SpawnLocation")
+	if sp then locLookup["Spawn"] = sp locNames[#locNames + 1] = "Spawn" end
+	local ml = w and w:FindFirstChild("Map") and w.Map:FindFirstChild("Map Locations")
+	for _, c in pairs(ml and ml:GetChildren() or {}) do
+		local p = c:IsA("BasePart") and c.Position or (c:IsA("Model") and c:GetPivot().Position)
+		if p and p.Magnitude > 1 and not locLookup[c.Name] then
+			locLookup[c.Name] = c
+			locNames[#locNames + 1] = c.Name
+		end
+	end
+	local qb = w and w:FindFirstChild("Quest Boards")
+	for _, c in pairs(qb and qb:GetChildren() or {}) do
+		local n = "Board: " .. c.Name
+		locLookup[n] = c
+		locNames[#locNames + 1] = n
+	end
+	local mg = w and w:FindFirstChild("Map") and w.Map:FindFirstChild("Mine")
+	locLookup["Mines Entrance"] = mg or (qb and qb:FindFirstChild("Mines Quest Board"))
+	if locLookup["Mines Entrance"] then locNames[#locNames + 1] = "Mines Entrance" end
+	table.sort(locNames)
+end
+local locChoice = locNames[1]
+sT4:Dropdown({Text="Location", Options=locNames, Default=locNames[1], Callback=function(v) locChoice=v end})
+sT4:Button({Text="TP to Location", Callback=function()
+	local t = locLookup[locChoice]
+	if not (t and t.Parent) then notify("Location gone: " .. tostring(locChoice)) return end
+	local cf = t:IsA("BasePart") and t.CFrame or t:GetPivot()
+	if char() then char():PivotTo(cf + Vector3.new(0, 5, 0)) notify("TP → " .. locChoice) end
+end})
+sT4:Button({Text="Teleport to Spawn", Callback=function()
+	local sp = workspace:FindFirstChildOfClass("SpawnLocation")
+	if sp then moveTo(sp.CFrame + Vector3.new(0,5,0)) notify("Teleported to spawn") end
+end})
+
+local sT5 = tTP:Section("Servers")
+sT5:Button({Text="Server Hop (quick)", Callback=function()
+	notify("Quick-joining...")
+	callSvc("ServersService", "quick_join")
+end})
+sT5:Button({Text="Join Emptiest Server", Callback=function()
+	notify("Scanning servers...")
+	task.spawn(function()
+		local best, pages = nil, 0
+		for page = 1, 10 do
+			local ok, res = callSvc("ServersService", "list_servers", page, "")
+			if not ok or type(res) ~= "table" or res.ok ~= true then break end
+			pages = page
+			for _, s in pairs(res.servers or {}) do
+				if s.server_id ~= game.JobId and (s.players or 99) < (s.max_players or 0)
+					and (not best or s.players < best.players) then
+					best = s
 				end
-				if #(res.servers or {}) < (res.page_size or 25) then break end
 			end
-			if best then
-				notify("Joining " .. tostring(best.server_name or best.server_id) .. " (" .. tostring(best.players) .. "/" .. tostring(best.max_players) .. ")")
-				callSvc("ServersService", "join_server", best.server_id)
-			else
-				notify("No emptier server found (" .. pages .. " pages scanned)")
-			end
-		end)
-	end})
+			if #(res.servers or {}) < (res.page_size or 25) then break end
+		end
+		if best then
+			notify("Joining " .. tostring(best.server_name or best.server_id) .. " (" .. tostring(best.players) .. "/" .. tostring(best.max_players) .. ")")
+			callSvc("ServersService", "join_server", best.server_id)
+		else
+			notify("No emptier server found (" .. pages .. " pages scanned)")
+		end
+	end)
+end})
 
-	local s6 = tVis:Section("ESP")
-	C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
-	C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
-	C.esp_chests = s6:Toggle({Text="Chests", Default=false, Callback=function(v) espOn.chests=v refreshESP() end})
-	C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
-	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
+local s6 = tVis:Section("ESP")
+C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
+C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
+C.esp_chests = s6:Toggle({Text="Chests", Default=false, Callback=function(v) espOn.chests=v refreshESP() end})
+C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
+s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
 
-	local s8 = tSet:Section("Config")
-	local cfgDD = s8:Dropdown({Text="Config", Options=listConfigs(), Default=curConfig, Callback=function(v) curConfig=v end})
-	local cfgBox = s8:TextBox({Text="Config Name", Placeholder="e.g. farming", Callback=function() end})
-	s8:Button({Text="Save", Callback=function()
-		local n = cfgBox and cfgBox:Get() or ""
-		local target = cfgNameOk(n) and n or curConfig
-		saveConfig(target)
-		if cfgNameOk(n) then curConfig = n end
+local s8 = tSet:Section("Config")
+local cfgDD = s8:Dropdown({Text="Config", Options=listConfigs(), Default=curConfig, Callback=function(v) curConfig=v end})
+local cfgBox = s8:TextBox({Text="Config Name", Placeholder="e.g. farming", Callback=function() end})
+s8:Button({Text="Save", Callback=function()
+	local n = cfgBox and cfgBox:Get() or ""
+	local target = cfgNameOk(n) and n or curConfig
+	saveConfig(target)
+	if cfgNameOk(n) then curConfig = n end
+	if cfgDD then cfgDD:SetOptions(listConfigs()) cfgDD:Set(curConfig) end
+	notify("Saved config: " .. curConfig)
+end})
+s8:Button({Text="Load", Callback=function()
+	loadConfig(curConfig)
+end})
+s8:Button({Text="Delete", Callback=function()
+	local p = cfgPath(curConfig)
+	if isFn(isfile) and isfile(p) and isFn(delfile) then
+		delfile(p)
+		curConfig = "default"
 		if cfgDD then cfgDD:SetOptions(listConfigs()) cfgDD:Set(curConfig) end
-		notify("Saved config: " .. curConfig)
-	end})
-	s8:Button({Text="Load", Callback=function()
-		loadConfig(curConfig)
-	end})
-	s8:Button({Text="Delete", Callback=function()
-		local p = cfgPath(curConfig)
-		if isFn(isfile) and isfile(p) and isFn(delfile) then
-			delfile(p)
-			curConfig = "default"
-			if cfgDD then cfgDD:SetOptions(listConfigs()) cfgDD:Set(curConfig) end
-			notify("Deleted config")
-		else
-			notify("Can't delete (no delfile)")
-		end
-	end})
-	s8:Label("The last used config auto-loads on launch and after teleports.")
-	s8:Button({Text="Unload Hub", Danger=true, Callback=function()
-		if ENV["Zentynal Hub"] then ENV["Zentynal Hub"].Destroy() end
-	end})
+		notify("Deleted config")
+	else
+		notify("Can't delete (no delfile)")
+	end
+end})
+s8:Label("The last used config auto-loads on launch and after teleports.")
+s8:Button({Text="Unload Hub", Danger=true, Callback=function()
+	if ENV["Zentynal Hub"] then ENV["Zentynal Hub"].Destroy() end
+end})
 
-	local s7 = tSet:Section("Credits")
-	s7:Label("Zentynal Hub — Refactored")
-	s7:Label("Based on MythiOs UI")
-	s7:Button({Text="Copy Discord Link", Callback=function()
-		if clipSet then clipSet("https://mythios.online/discord") notify("Discord link copied") end
-	end})
-end)
+local s7 = tSet:Section("Credits")
+s7:Label("Zentynal Hub — Refactored")
+s7:Label("Based on MythiOs UI")
+s7:Button({Text="Copy Discord Link", Callback=function()
+	if clipSet then clipSet("https://mythios.online/discord") notify("Discord link copied") end
+end})
 
 local function destroy()
 	dead = true
