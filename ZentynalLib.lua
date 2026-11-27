@@ -403,8 +403,6 @@ function Library.ShowLoading(opts)
 	return splash
 end
 
-return Library
-
 -- ── WINDOW CREATION ────────────────────────────────────────────────────────
 
 function Library.CreateWindow(opts)
