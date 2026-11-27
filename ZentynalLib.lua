@@ -1,5 +1,5 @@
 -- ZentynalLib.lua
--- Zentynal UI Library V8 (Search Highlight + Tab Transitions)
+-- Zentynal UI Library V9 (Search Highlight + Tab Transitions + Grid + Profile)
 -- Drop-in for YourNenHub.
 
 local Players = game:GetService("Players")
@@ -364,7 +364,7 @@ local ICON_KIND = {
 	Precision = "sliders", Humanization = "dots", Box = "grid", Info = "list",
 	Combat = "crosshair", Farm = "circle", Movement = "bolt", Player = "home",
 	Main = "home", Stats = "list", Weapon = "sliders",
-	Gathering = "funnel", Loot = "drop", Exam = "shield",
+	Gathering = "funnel", Loot = "drop", Exam = "shield", Home = "home",
 }
 
 local function mark(parent, props)
@@ -518,12 +518,13 @@ local function nameToKey(name)
 end
 
 -- ── Section (card) ──────────────────────────────────────────────────────
-local function createSection(host, title, registry)
+local function createSection(host, title, registry, opts)
+	opts = opts or {}
 	local card = mk("Frame", {
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = opts.Size or UDim2.new(1, 0, 0, 0),
+		AutomaticSize = opts.Size and Enum.AutomaticSize.None or Enum.AutomaticSize.Y,
 	}, host)
 	corner(card, 16)
 	mk("UIGradient", {
@@ -1704,6 +1705,67 @@ function Library.CreateWindow(opts)
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 	}, sidebarNav)
 
+	-- Profile row (bottom of sidebar)
+	local profileRow = mk("Frame", {
+		Name = "ProfileRow",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 64),
+		ZIndex = 5,
+	}, sidebar)
+	local profileName = mk("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(50, 12),
+		Size = UDim2.new(1, -58, 0, 18),
+		Font = Enum.Font.GothamBold,
+		Text = LocalPlayer.Name or "Player",
+		TextColor3 = Theme.text,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 6,
+	}, profileRow)
+	local profileRole = mk("TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(50, 30),
+		Size = UDim2.new(1, -58, 0, 16),
+		Font = Enum.Font.Gotham,
+		Text = "Free",
+		TextColor3 = Theme.textDim,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 6,
+	}, profileRow)
+	local profileAvatar = mk("Frame", {
+		Name = "Avatar",
+		BackgroundColor3 = Theme.panelAlt,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 16, 0.5, 0),
+		Size = UDim2.fromOffset(34, 34),
+		ZIndex = 6,
+	}, profileRow)
+	corner(profileAvatar, 17)
+	stroke(profileAvatar, Theme.accent, 1, 0.4)
+	local profileImg = mk("ImageLabel", {
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Image = "",
+		ScaleType = Enum.ScaleType.Fit,
+		ZIndex = 7,
+	}, profileAvatar)
+	corner(profileImg, 17)
+	task.spawn(function()
+		local ok, img = pcall(function()
+			return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		end)
+		if ok and img and profileImg then
+			profileImg.Image = img
+		end
+	end)
+
 	local content = mk("Frame", {
 		Name = "Content",
 		BackgroundColor3 = Theme.bg,
@@ -1836,6 +1898,19 @@ function Library.CreateWindow(opts)
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = Theme.textDim }, 0.16) end)
 	reopen.MouseButton1Click:Connect(function() pressPunch(reopen) window:Toggle() end)
 
+	function window:SetProfile(name, role, avatarId)
+		if name then profileName.Text = tostring(name) end
+		if role then profileRole.Text = tostring(role) end
+		if avatarId then
+			task.spawn(function()
+				local ok, img = pcall(function()
+					return Players:GetUserThumbnailAsync(avatarId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+				end)
+				if ok and img and profileImg then profileImg.Image = img end
+			end)
+		end
+	end
+
 	function window:SetOpen(visible)
 		visible = visible and true or false
 		if self._open == visible then return end
@@ -1945,6 +2020,32 @@ function Library.CreateWindow(opts)
 			return sec
 		end
 
+		function tabApi:AddGrid()
+			local gridFrame = mk("Frame", {
+				Name = "Grid",
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				LayoutOrder = #self._sections + 1,
+			}, scroll)
+			local gridLayout = mk("UIGridLayout", {
+				CellSize = UDim2.new(0.5, -6, 0, 0),
+				CellPadding = UDim2.new(0, 12, 0, 0),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				FillDirectionMaxCells = 2,
+			}, gridFrame)
+			local api2 = {}
+			function api2:Section(t)
+				local sec = createSection(gridFrame, t, window._flags)
+				sec.Instance.Size = UDim2.new(1, 0, 0, 0)
+				sec.Instance.AutomaticSize = Enum.AutomaticSize.Y
+				sec.Instance.LayoutOrder = #self._sections + 1
+				table.insert(self._sections, sec)
+				return sec
+			end
+			return api2
+		end
+
 		function tabApi._applySearch(q)
 			local any = false
 			for _, sec in ipairs(self._sections) do
@@ -1990,14 +2091,10 @@ function Library.CreateWindow(opts)
 						tween(c, { ImageTransparency = 1 }, 0.1)
 					end
 				end
-				task.delay(0.13, function()
-					if page and page.Parent and not page.Visible then return end
-				end)
 			end
 		end
 
 		local function select()
-			local prevActive = self._active
 			for n, t in pairs(self._tabs) do
 				local isSel = n == name
 				tween(t.Button, {
@@ -2105,7 +2202,7 @@ function Library.CreateWindow(opts)
 		window:SetSearch(searchBox.Text)
 	end)
 	searchBox.Focused:Connect(function() tween(searchStroke, { Color = Theme.accent, Transparency = 0.05 }, 0.16) end)
-	searchBox:FocusLost:Connect(function() tween(searchStroke, { Color = Theme.stroke, Transparency = 0.4 }, 0.2) end)
+	searchBox.FocusLost:Connect(function() tween(searchStroke, { Color = Theme.stroke, Transparency = 0.4 }, 0.2) end)
 
 	function window:Notify(opts)
 		local text = type(opts) == "table" and (opts.Text or opts.Title) or tostring(opts)
