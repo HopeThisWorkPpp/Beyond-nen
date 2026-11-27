@@ -40,8 +40,8 @@ local getCombat, face, examGetup, unpinnedExamSpeed, setSprint, mazeRoute
 local neededNodes
 
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
-ENV.Zentynal Hub = ENV.Zentynal Hub or nil
-if ENV.Zentynal Hub and ENV.Zentynal Hub.Destroy then pcall(ENV.Zentynal Hub.Destroy) end
+ENV["Zentynal Hub"] = ENV["Zentynal Hub"] or nil
+if ENV["Zentynal Hub"] and ENV["Zentynal Hub"].Destroy then pcall(ENV["Zentynal Hub"].Destroy) end
 
 task.defer(function()
 	local ok, hui = pcall(function() return gethui() end)
@@ -103,7 +103,7 @@ if not lib then
 	error("[Zentynal Hub] Failed to load ZentynalLib from GitHub.")
 end
 
-local window = lib:CreateWindow({
+local window = lib.CreateWindow({
 	Title = "Zentynal",
 	Subtitle = "Beyond Nen",
 	ToggleKey = Enum.KeyCode.RightShift
@@ -2290,7 +2290,7 @@ task.delay(0.5, function()
 	end})
 	s8:Label("The last used config auto-loads on launch and after teleports.")
 	s8:Button({Text="Unload Hub", Danger=true, Callback=function()
-		if ENV.Zentynal Hub then ENV.Zentynal Hub.Destroy() end
+		if ENV["Zentynal Hub"] then ENV["Zentynal Hub"].Destroy() end
 	end})
 
 	local s7 = tSet:Section("Credits")
@@ -2312,7 +2312,7 @@ local function destroy()
 	setAntiAFK(false); clearESP(); setFB(false)
 	pcall(function() if window.Destroy then window:Destroy() end end)
 end
-ENV.Zentynal Hub = {Destroy = destroy, Window = window}
+ENV["Zentynal Hub"] = {Destroy = destroy, Window = window}
 ENV.BNH = {
 	set = function(k, v)
 		local map = {autoExamOn=function() autoExamOn=v end, farmOn=function() farmOn=v auraOn=v end,
