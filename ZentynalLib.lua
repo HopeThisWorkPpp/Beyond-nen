@@ -1,5 +1,4 @@
--- Zentynal Hub v3 (Beyond Nen) - Bundled Library Edition (Part 1)
--- ZentynalLib is embedded directly below. No HTTP fetch required.
+-- Zentynal Hub v3 (Beyond Nen) 
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
