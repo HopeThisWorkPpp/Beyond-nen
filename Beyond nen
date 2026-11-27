@@ -71,19 +71,7 @@ if not isFn(firePP) then
 	end
 end
 
-local function httpGet(url)
-	for _, f in ipairs({
-		function() return game:HttpGet(url) end,
-		function() return httpget and httpget(url) end,
-		function() local r = request and request({Url = url, Method = "GET"}) return r and r.Body end,
-		function() local r = http_request and http_request({Url = url, Method = "GET"}) return r and r.Body end,
-	}) do
-		local ok, res = pcall(f)
-		if ok and type(res) == "string" and #res > 0 then return res end
-	end
-end
-
--- Load custom Zentynal UI Library (local-first, GitHub fallback)
+-- Load custom Zentynal UI Library
 local lib
 local function tryLoadLib(source, label)
 	if type(source) ~= "string" or #source < 1000 then return nil end
@@ -116,7 +104,6 @@ end
 
 -- 2. Fallback to GitHub if local file is missing
 if not lib then
-	warn("[Zentynal Hub] Local ZentynalLib.lua not found. Trying GitHub fallback...")
 	local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/refs/heads/main/ZentynalLib.lua"
 	local ok, res = pcall(function() return game:HttpGet(url) end)
 	
@@ -128,7 +115,7 @@ if not lib then
 end
 
 if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib. Please save ZentynalLib.lua directly into your Delta Workspace folder.")
+	error("[Zentynal Hub] Failed to load ZentynalLib. Please make sure your executor allows HttpGet, or save ZentynalLib.lua directly into your Delta Workspace folder.")
 end
 
 local window = lib.CreateWindow({
