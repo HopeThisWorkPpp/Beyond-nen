@@ -1,5 +1,5 @@
 -- ZentynalLib.lua
--- Zentynal UI Library V7 (Full + Polish + Config + Promo)
+-- Zentynal UI Library V8 (Search Highlight + Tab Transitions)
 -- Drop-in for YourNenHub.
 
 local Players = game:GetService("Players")
@@ -316,6 +316,44 @@ function Library.SetTheme(patch)
 	for k, v in pairs(patch or {}) do Theme[k] = v end
 end
 
+-- ── Text + Search Highlight ─────────────────────────────────────────────
+local function xmlEscape(s)
+	if type(s) ~= "string" then s = tostring(s) end
+	return s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+end
+
+local function rgbHex(c)
+	if typeof(c) ~= "Color3" then return "FFFFFF" end
+	return string.format("%02X%02X%02X",
+		math.floor(c.R * 255 + 0.5),
+		math.floor(c.G * 255 + 0.5),
+		math.floor(c.B * 255 + 0.5))
+end
+
+local function highlightText(text, query, hlColor)
+	text = tostring(text or "")
+	query = tostring(query or "")
+	if query == "" then return text end
+	local lowerText = string.lower(text)
+	local lowerQuery = string.lower(query)
+	if #lowerQuery == 0 then return text end
+	local out = {}
+	local cursor = 1
+	while true do
+		local s, e = string.find(lowerText, lowerQuery, cursor, true)
+		if not s then
+			out[#out + 1] = xmlEscape(string.sub(text, cursor))
+			break
+		end
+		out[#out + 1] = xmlEscape(string.sub(text, cursor, s - 1))
+		out[#out + 1] = '<font color="#' .. rgbHex(hlColor or Theme.accent) .. '"><b>'
+			.. xmlEscape(string.sub(text, s, e)) .. "</b></font>"
+		cursor = e + 1
+		if cursor > #text then break end
+	end
+	return table.concat(out)
+end
+
 -- ── Icon painting ───────────────────────────────────────────────────────
 local ICON_KIND = {
 	ESP = "grid", Aim = "crosshair", Silent = "circle", Trigger = "bolt",
@@ -531,7 +569,11 @@ local function createSection(host, title, registry)
 	local api = { Instance = card, _items = {}, _title = string.lower(tostring(title or "")) }
 	local function nextOrder() order += 1 return order end
 	local function trackSearch(text, root)
-		table.insert(api._items, { text = string.lower(tostring(text or "")), root = root })
+		table.insert(api._items, {
+			text = tostring(text or ""),
+			lower = string.lower(tostring(text or "")),
+			root = root,
+		})
 	end
 
 	function api:SetSearch(query)
@@ -539,9 +581,21 @@ local function createSection(host, title, registry)
 		local titleHit = q == "" or string.find(self._title, q, 1, true) ~= nil
 		local any = titleHit
 		for _, item in ipairs(self._items) do
-			local show = q == "" or titleHit or string.find(item.text, q, 1, true) ~= nil
-			item.root.Visible = show
-			if show then any = true end
+			local hit = q == "" or titleHit or string.find(item.lower, q, 1, true) ~= nil
+			if hit then
+				item.root.Visible = true
+				if item.textLabel then
+					item.textLabel.RichText = true
+					if q == "" or titleHit then
+						item.textLabel.Text = item.text
+					else
+						item.textLabel.Text = highlightText(item.text, query, Theme.accent)
+					end
+				end
+				any = true
+			else
+				item.root.Visible = false
+			end
 		end
 		self.Instance.Visible = any
 		return any
@@ -568,17 +622,17 @@ local function createSection(host, title, registry)
 
 	function api:Toggle(opts)
 		opts = opts or {}
+		local labelText = tostring(opts.Text or "Toggle")
 		local desc = tostring(opts.Description or "")
 		local rowH = desc ~= "" and 40 or 30
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = nextOrder() }, card)
-		trackSearch(tostring(opts.Text or "") .. " " .. desc, row)
 
-		mk("TextLabel", {
+		local titleLabel = mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -56, 0, 16),
 			Position = UDim2.fromOffset(0, desc ~= "" and 2 or 7),
 			Font = Enum.Font.GothamMedium,
-			Text = tostring(opts.Text or "Toggle"),
+			Text = labelText,
 			TextColor3 = Theme.text,
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -596,6 +650,9 @@ local function createSection(host, title, registry)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, row)
 		end
+		trackSearch(labelText .. " " .. desc, row)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = titleLabel end
 
 		local on = opts.Default == true
 		local accent = opts.Accent or Theme.accent
@@ -634,13 +691,14 @@ local function createSection(host, title, registry)
 
 	function api:Button(opts)
 		opts = opts or {}
+		local labelText = tostring(opts.Text or "Button")
 		local btn = mk("TextButton", {
 			AutoButtonColor = false,
 			BackgroundColor3 = Theme.panelAlt,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 32),
 			Font = Enum.Font.GothamBold,
-			Text = tostring(opts.Text or "Button"),
+			Text = labelText,
 			TextColor3 = opts.Danger and Theme.rose or Theme.accent,
 			TextSize = 12,
 			LayoutOrder = nextOrder(),
@@ -651,7 +709,9 @@ local function createSection(host, title, registry)
 			Rotation = 45,
 		}, btn)
 		stroke(btn, opts.Danger and Theme.rose or Theme.accentDim, 1, 0.45)
-		trackSearch(opts.Text, btn)
+		trackSearch(labelText, btn)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = btn end
 		hoverScale(btn, 1.02)
 		btn.MouseButton1Click:Connect(function()
 			pressPunch(btn)
@@ -670,17 +730,17 @@ local function createSection(host, title, registry)
 
 	function api:Slider(opts)
 		opts = opts or {}
+		local labelText = tostring(opts.Text or "Slider")
 		local minV, maxV = tonumber(opts.Min) or 0, tonumber(opts.Max) or 1
 		local value = math.clamp(tonumber(opts.Default) or minV, minV, maxV)
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 54 or 40), LayoutOrder = nextOrder() }, card)
-		trackSearch((opts.Text or "") .. " " .. desc, row)
 
-		mk("TextLabel", {
+		local titleLabel = mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -48, 0, 16),
 			Font = Enum.Font.GothamMedium,
-			Text = tostring(opts.Text or "Slider"),
+			Text = labelText,
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -709,6 +769,9 @@ local function createSection(host, title, registry)
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Right,
 		}, row)
+		trackSearch(labelText .. " " .. desc, row)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = titleLabel end
 
 		local bar = mk("Frame", {
 			BackgroundColor3 = Theme.off,
@@ -773,13 +836,13 @@ local function createSection(host, title, registry)
 
 	function api:TextBox(opts)
 		opts = opts or {}
+		local labelText = tostring(opts.Text or "Value")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52), LayoutOrder = nextOrder() }, card)
-		trackSearch(opts.Text or opts.Placeholder, row)
-		mk("TextLabel", {
+		local titleLabel = mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 0, 16),
 			Font = Enum.Font.GothamMedium,
-			Text = tostring(opts.Text or "Value"),
+			Text = labelText,
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -801,6 +864,9 @@ local function createSection(host, title, registry)
 		corner(box, 8)
 		pad(box, 0, 0, 10, 10)
 		local boxStroke = stroke(box, Theme.stroke, 1, 0.35)
+		trackSearch(labelText .. " " .. tostring(opts.Placeholder or ""), row)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = titleLabel end
 		local ctrl = { Flag = opts.Flag, _kind = "textbox" }
 		function ctrl:Get() return box.Text end
 		function ctrl:Set(text, silent)
@@ -822,19 +888,19 @@ local function createSection(host, title, registry)
 
 	function api:Keybind(opts)
 		opts = opts or {}
+		local labelText = tostring(opts.Text or "Keybind")
 		local current = opts.Default
 		if typeof(current) == "string" then current = Enum.KeyCode[current] or Enum.KeyCode.K end
 		if typeof(current) ~= "EnumItem" then current = Enum.KeyCode.K end
 		local listening = false
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 46 or 32), LayoutOrder = nextOrder() }, card)
-		trackSearch((opts.Text or "") .. " " .. desc, row)
-		mk("TextLabel", {
+		local titleLabel = mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -92, 0, 16),
 			Position = UDim2.fromOffset(0, desc ~= "" and 4 or 8),
 			Font = Enum.Font.GothamMedium,
-			Text = tostring(opts.Text or "Keybind"),
+			Text = labelText,
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -852,6 +918,10 @@ local function createSection(host, title, registry)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, row)
 		end
+		trackSearch(labelText .. " " .. desc, row)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = titleLabel end
+
 		local btn = mk("TextButton", {
 			AutoButtonColor = false,
 			BackgroundColor3 = Theme.panelAlt,
@@ -901,23 +971,23 @@ local function createSection(host, title, registry)
 	function api:ColorPicker(opts)
 		opts = opts or {}
 		local ignoreColorOutsideUntil = 0
+		local labelText = tostring(opts.Text or "Color")
 		local current = opts.Default or Theme.accent
 		local original = current
 		local h, s, v = rgbToHsv(current)
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 42 or 28), LayoutOrder = nextOrder() }, card)
-		trackSearch((opts.Text or "Color") .. " " .. desc .. " color picker rgb hue", row)
 
 		local openBtn = mk("TextButton", { AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Text = "" }, row)
 		local preview = mk("Frame", { BackgroundColor3 = current, BorderSizePixel = 0, Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(0, 5), ZIndex = 2 }, openBtn)
 		corner(preview, 5)
 		stroke(preview, Color3.fromRGB(255, 255, 255), 1, 0.55)
-		mk("TextLabel", {
+		local titleLabel = mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(26, desc ~= "" and 2 or 0),
 			Size = UDim2.new(1, -26, 0, 16),
 			Font = Enum.Font.GothamMedium,
-			Text = tostring(opts.Text or "Color"),
+			Text = labelText,
 			TextColor3 = Theme.text,
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -937,6 +1007,9 @@ local function createSection(host, title, registry)
 				ZIndex = 2,
 			}, openBtn)
 		end
+		trackSearch(labelText .. " " .. desc .. " color picker rgb hue", row)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = titleLabel end
 
 		local pop, svFill, svCursor, hueCursor, curSwatch, rBox, gBox, bBox
 
@@ -1102,6 +1175,7 @@ local function createSection(host, title, registry)
 
 	function api:Dropdown(opts)
 		opts = opts or {}
+		local labelText = tostring(opts.Text or "Select")
 		local options = {}
 		local rawOpts = opts.Options or opts.Values or opts.List or {}
 		if type(rawOpts) == "table" then
@@ -1121,12 +1195,14 @@ local function createSection(host, title, registry)
 
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 66 or 52), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(), ZIndex = 8 }, card)
-		trackSearch(tostring(opts.Text or "") .. " " .. desc .. " " .. table.concat(options, " "), row)
 
-		mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamMedium, Text = tostring(opts.Text or "Select"), TextColor3 = Theme.text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left }, row)
+		local titleLabel = mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamMedium, Text = labelText, TextColor3 = Theme.text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left }, row)
 		if desc ~= "" then
 			mk("TextLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 14), Font = Enum.Font.Gotham, Text = string.gsub(desc, " +", "   "), TextColor3 = Theme.textDim, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
 		end
+		trackSearch(labelText .. " " .. desc .. " " .. table.concat(options, " "), row)
+		local tracked = api._items[#api._items]
+		if tracked then tracked.textLabel = titleLabel end
 
 		local trigger = mk("TextButton", { AutoButtonColor = false, BackgroundColor3 = Theme.panelAlt, BorderSizePixel = 0, Position = UDim2.fromOffset(0, desc ~= "" and 32 or 20), Size = UDim2.new(1, 0, 0, 30), Text = "", ZIndex = 9 }, row)
 		corner(trigger, 6)
@@ -1391,19 +1467,6 @@ local function showPromo(screen)
 	}, card)
 	corner(closeBtn, 8)
 	stroke(closeBtn, Theme.stroke, 1, 0.4)
-
-	local linkBox = mk("TextBox", {
-		BackgroundColor3 = Theme.panelAlt,
-		BackgroundTransparency = 0.4,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(20, 208),
-		Size = UDim2.new(1, -40, 0, 0),
-		Text = "",
-		Font = Enum.Font.Gotham,
-		TextSize = 0,
-		ZIndex = 9002,
-	}, card)
-	linkBox.Visible = false
 
 	local copied = false
 	local function setCopied()
@@ -1849,8 +1912,17 @@ function Library.CreateWindow(opts)
 			ZIndex = 2,
 		}, btn)
 
-		local page = mk("ScrollingFrame", {
+		local page = mk("Frame", {
 			Name = "Page_" .. name,
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 1),
+			Visible = false,
+			ClipsDescendants = true,
+		}, pagesFolder)
+
+		local scroll = mk("ScrollingFrame", {
+			Name = "Scroll",
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Size = UDim2.fromScale(1, 1),
@@ -1858,18 +1930,17 @@ function Library.CreateWindow(opts)
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			ScrollBarThickness = 3,
 			ScrollBarImageColor3 = Theme.accentDim,
-			Visible = false,
-		}, pagesFolder)
-		pad(page, 4, 16, 4, 4)
+		}, page)
+		pad(scroll, 4, 16, 4, 4)
 		mk("UIListLayout", {
 			Padding = UDim.new(0, 12),
 			SortOrder = Enum.SortOrder.LayoutOrder,
-		}, page)
+		}, scroll)
 
-		local tabApi = { Name = name, Button = btn, Page = page, _sections = {}, _iconBox = iconBox, _accent = accentBar, _label = label }
+		local tabApi = { Name = name, Button = btn, Page = page, Scroll = scroll, _sections = {}, _iconBox = iconBox, _accent = accentBar, _label = label }
 
 		function tabApi:Section(sectionTitle)
-			local sec = createSection(page, sectionTitle, window._flags)
+			local sec = createSection(scroll, sectionTitle, window._flags)
 			table.insert(self._sections, sec)
 			return sec
 		end
@@ -1883,7 +1954,50 @@ function Library.CreateWindow(opts)
 			return any
 		end
 
+		local function fadePage(show)
+			if show then
+				page.Visible = true
+				scroll.Position = UDim2.fromOffset(0, 6)
+				scroll.BackgroundTransparency = 1
+				for _, c in ipairs(scroll:GetDescendants()) do
+					if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
+						c.TextTransparency = 1
+					elseif c:IsA("Frame") then
+						if c.BackgroundTransparency < 1 then c.BackgroundTransparency = 1 end
+					elseif c:IsA("ImageLabel") or c:IsA("ImageButton") then
+						c.ImageTransparency = 1
+					end
+				end
+				tween(scroll, { Position = UDim2.fromOffset(0, 0) }, 0.16, Enum.EasingStyle.Quart)
+				for _, c in ipairs(scroll:GetDescendants()) do
+					if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
+						tween(c, { TextTransparency = 0 }, 0.15)
+					elseif c:IsA("Frame") then
+						if c.BackgroundTransparency < 1 then tween(c, { BackgroundTransparency = 0 }, 0.15) end
+					elseif c:IsA("ImageLabel") or c:IsA("ImageButton") then
+						tween(c, { ImageTransparency = 0 }, 0.15)
+					end
+				end
+			else
+				scroll.Position = UDim2.fromOffset(0, 0)
+				tween(scroll, { Position = UDim2.fromOffset(0, -6) }, 0.12, Enum.EasingStyle.Quart)
+				for _, c in ipairs(scroll:GetDescendants()) do
+					if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
+						tween(c, { TextTransparency = 1 }, 0.1)
+					elseif c:IsA("Frame") then
+						if c.BackgroundTransparency < 1 then tween(c, { BackgroundTransparency = 1 }, 0.1) end
+					elseif c:IsA("ImageLabel") or c:IsA("ImageButton") then
+						tween(c, { ImageTransparency = 1 }, 0.1)
+					end
+				end
+				task.delay(0.13, function()
+					if page and page.Parent and not page.Visible then return end
+				end)
+			end
+		end
+
 		local function select()
+			local prevActive = self._active
 			for n, t in pairs(self._tabs) do
 				local isSel = n == name
 				tween(t.Button, {
@@ -1909,10 +2023,20 @@ function Library.CreateWindow(opts)
 						end
 					end
 				end
-				t.Page.Visible = isSel
+				if not isSel and t.Page.Visible then
+					fadePage(false)
+					task.delay(0.12, function()
+						if self._active ~= n then t.Page.Visible = false end
+					end)
+				end
 			end
 			self._active = name
 			pageTitle.Text = name
+			if not page.Visible then
+				fadePage(true)
+			else
+				scroll.Position = UDim2.fromOffset(0, 0)
+			end
 			if self._search ~= "" then tabApi._applySearch(self._search) end
 		end
 
@@ -1960,10 +2084,20 @@ function Library.CreateWindow(opts)
 					end
 				end
 			end
-			tt.Page.Visible = isSel
+			if not isSel and tt.Page.Visible then
+				tween(tt.Scroll, { Position = UDim2.fromOffset(0, -6) }, 0.12)
+				task.delay(0.12, function()
+					if self._active ~= n then tt.Page.Visible = false end
+				end)
+			end
 		end
 		self._active = name
 		pageTitle.Text = name
+		if not t.Page.Visible then
+			t.Page.Visible = true
+			t.Scroll.Position = UDim2.fromOffset(0, 6)
+			tween(t.Scroll, { Position = UDim2.fromOffset(0, 0) }, 0.16, Enum.EasingStyle.Quart)
+		end
 		if self._search ~= "" and t._applySearch then t._applySearch(self._search) end
 	end
 
@@ -1971,7 +2105,7 @@ function Library.CreateWindow(opts)
 		window:SetSearch(searchBox.Text)
 	end)
 	searchBox.Focused:Connect(function() tween(searchStroke, { Color = Theme.accent, Transparency = 0.05 }, 0.16) end)
-	searchBox.FocusLost:Connect(function() tween(searchStroke, { Color = Theme.stroke, Transparency = 0.4 }, 0.2) end)
+	searchBox:FocusLost:Connect(function() tween(searchStroke, { Color = Theme.stroke, Transparency = 0.4 }, 0.2) end)
 
 	function window:Notify(opts)
 		local text = type(opts) == "table" and (opts.Text or opts.Title) or tostring(opts)
@@ -2110,7 +2244,7 @@ function Library.CreateWindow(opts)
 		return false
 	end
 
-	-- drag by brand row in sidebar
+	-- drag
 	do
 		local dragging, dragStart, startPos = false, nil, nil
 		sideBrand.InputBegan:Connect(function(input)
@@ -2142,7 +2276,7 @@ function Library.CreateWindow(opts)
 		end)
 	end
 
-	-- toggle keys: CAS + UIS fallback
+	-- toggle keys
 	do
 		local casName = "ZentynalToggle_" .. tostring(math.random(100000, 999999))
 		local function onToggle()
