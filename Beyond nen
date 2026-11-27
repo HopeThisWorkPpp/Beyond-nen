@@ -71,7 +71,7 @@ if not isFn(firePP) then
 	end
 end
 
--- Load custom Zentynal UI Library
+-- Load custom Zentynal UI Library (Strict Local Load)
 local lib
 local function tryLoadLib(source, label)
 	if type(source) ~= "string" or #source < 1000 then return nil end
@@ -88,7 +88,6 @@ local function tryLoadLib(source, label)
 	return nil
 end
 
--- 1. Try local file first
 if isFn(readfile) and isFn(isfile) then
 	for _, p in ipairs({"ZentynalLib.lua", "QA Scripts/ZentynalLib.lua", "Zentynal Hub/ZentynalLib.lua"}) do
 		local okF, exists = pcall(isfile, p)
@@ -102,20 +101,8 @@ if isFn(readfile) and isFn(isfile) then
 	end
 end
 
--- 2. Fallback to GitHub if local file is missing
 if not lib then
-	local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/refs/heads/main/ZentynalLib.lua"
-	local ok, res = pcall(function() return game:HttpGet(url) end)
-	
-	if ok and type(res) == "string" and #res > 1000 and not res:match("^%s*<") then
-		lib = tryLoadLib(res, "github")
-	else
-		warn("[Zentynal Hub] GitHub fetch failed or blocked by executor.")
-	end
-end
-
-if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib. Please make sure your executor allows HttpGet, or save ZentynalLib.lua directly into your Delta Workspace folder.")
+	error("[Zentynal Hub] ERROR: Could not find ZentynalLib.lua locally. Delta Executor blocked the download. You MUST save ZentynalLib.lua into your Delta Workspace folder next to this script.")
 end
 
 local window = lib.CreateWindow({
