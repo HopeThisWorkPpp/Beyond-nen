@@ -1,6 +1,6 @@
 -- ZentynalLib.lua
 -- Zentynal UI Library V6 (Full + Polish)
--- Drop-in for YourNenHub.
+-- Drop-in for Zentynal Hub.
 -- Components: Toggle, Button, Slider, TextBox, Keybind, ColorPicker,
 -- Dropdown, Label, Paragraph, Icon headers, Tab search, Toasts,
 -- Window drag, Mobile scaling, Popup layer, Reopen pill.
