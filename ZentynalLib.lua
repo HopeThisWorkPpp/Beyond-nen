@@ -661,7 +661,7 @@ local function createSection(host, title, registry, opts)
 			AutoButtonColor = false,
 			BackgroundColor3 = on and accent or Theme.off,
 			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(1, 0.5),
+			        AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, 0, 0.5, 0),
 			Size = UDim2.fromOffset(42, 24),
 			Text = "",
@@ -2035,13 +2035,14 @@ function Library.CreateWindow(opts)
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				FillDirectionMaxCells = 2,
 			}, gridFrame)
+			local tab = self
 			local api2 = {}
 			function api2:Section(t)
 				local sec = createSection(gridFrame, t, window._flags)
 				sec.Instance.Size = UDim2.new(1, 0, 1, 0)
 				sec.Instance.AutomaticSize = Enum.AutomaticSize.None
-				sec.Instance.LayoutOrder = #self._sections + 1
-				table.insert(self._sections, sec)
+				sec.Instance.LayoutOrder = #tab._sections + 1
+				table.insert(tab._sections, sec)
 				return sec
 			end
 			return api2
