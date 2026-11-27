@@ -86,38 +86,24 @@ end
 
 -- Load custom Zentynal UI Library from GitHub
 local lib
-print("[YourNenHub] Fetching ZentynalLib from GitHub...")
 local ok, res = pcall(function()
 	return game:HttpGet("https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua")
 end)
 
-if not ok then
-	error("[YourNenHub] HttpGet failed: " .. tostring(res))
-end
-
-print("[YourNenHub] Received: " .. tostring(#res) .. " bytes")
-
-if type(res) == "string" and #res > 1000 then
-	local fn, err = loadstring(res, "@ZentynalLib")
+if ok and type(res) == "string" and #res > 1000 then
+	local fn = loadstring(res)
 	if type(fn) == "function" then
 		local ok2, l = pcall(fn)
 		if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
 			lib = l
-		else
-			error("[YourNenHub] Library loaded but returned invalid table. Error: " .. tostring(l))
 		end
-	else
-		error("[YourNenHub] Syntax Error in ZentynalLib.lua: " .. tostring(err))
 	end
-else
-	error("[YourNenHub] Invalid response from GitHub (Size: " .. tostring(#res) .. "). Are you using the Raw URL?")
 end
 
 if not lib then
 	error("[YourNenHub] Failed to load ZentynalLib from GitHub.")
 end
 
--- Create the window
 local window = lib:CreateWindow({
 	Title = "Zentynal",
 	Subtitle = "Beyond Nen",
