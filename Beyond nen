@@ -114,6 +114,7 @@ local ok3, result3 = pcall(function()
 
     print("[DEBUG] window:", type(w))
     print("[DEBUG] SetProfile:", type(w.SetProfile))
+    print("[DEBUG] MAIN SCRIPT PASSED UI INITIALIZATION")
 
     w:SetProfile(game:GetService("Players").LocalPlayer.Name, "Free", game:GetService("Players").LocalPlayer.UserId)
 
