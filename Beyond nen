@@ -83,24 +83,49 @@ local function httpGet(url)
 	end
 end
 
--- Load custom Zentynal UI Library from GitHub
+-- Load custom Zentynal UI Library (local-first, GitHub fallback)
 local lib
-local ok, res = pcall(function()
-	return game:HttpGet("https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua")
-end)
+local function tryLoadLib(source, label)
+	if type(source) ~= "string" or #source < 1000 then return nil end
+	local fn, err = loadstring(source)
+	if type(fn) ~= "function" then
+		warn("[Zentynal Hub] lib compile fail (" .. tostring(label) .. "): " .. tostring(err))
+		return nil
+	end
+	local ok2, l = pcall(fn)
+	if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
+		return l
+	end
+	warn("[Zentynal Hub] lib runtime fail (" .. tostring(label) .. "): " .. tostring(l))
+	return nil
+end
 
-if ok and type(res) == "string" and #res > 1000 then
-	local fn = loadstring(res)
-	if type(fn) == "function" then
-		local ok2, l = pcall(fn)
-		if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
-			lib = l
+-- 1. local workspace file
+if isFn(readfile) and isFn(isfile) then
+	for _, p in ipairs({"ZentynalLib.lua", "QA Scripts/ZentynalLib.lua", "Zentynal Hub/ZentynalLib.lua"}) do
+		local okF, exists = pcall(isfile, p)
+		if okF and exists then
+			local okR, data = pcall(readfile, p)
+			if okR and type(data) == "string" then
+				lib = tryLoadLib(data, "local:" .. p)
+				if lib then break end
+			end
 		end
 	end
 end
 
+-- 2. GitHub fallback
 if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib from GitHub.")
+	local ok, res = pcall(function()
+		return game:HttpGet("https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua")
+	end)
+	if ok and type(res) == "string" then
+		lib = tryLoadLib(res, "github")
+	end
+end
+
+if not lib then
+	error("[Zentynal Hub] Failed to load ZentynalLib from GitHub or workspace.")
 end
 
 local window = lib.CreateWindow({
@@ -108,6 +133,8 @@ local window = lib.CreateWindow({
 	Subtitle = "Beyond Nen",
 	ToggleKey = Enum.KeyCode.RightShift
 })
+
+window:SetProfile(lp.Name, "Free", lp.UserId)
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
 
@@ -1922,16 +1949,40 @@ task.spawn(function()
 end)
 
 task.delay(0.5, function()
-	local tPlayer = window:AddTab("Player")
-	local tCombat = window:AddTab("Combat")
-	local tFarm = window:AddTab("Farm")
-	local tGather = window:AddTab("Gathering")
-	local tLoot = window:AddTab("Loot")
-	local tExam = window:AddTab("Exam")
-	local tProg = window:AddTab("Progression")
-	local tTP = window:AddTab("Teleport")
-	local tVis = window:AddTab("Visuals")
-	local tSet = window:AddTab("Settings")
+	-- ── Home (dashboard grid) ────────────────────────────────────────────
+	local tHome = window:AddTab("Home", "home")
+	local gHome = tHome:AddGrid()
+	local sAbout = gHome:Section("About")
+	sAbout:Label("Version v3.0.0")
+	sAbout:Label("Updated 2026-11-25")
+	sAbout:Label("Status Rewrite")
+
+	local sUpdates = gHome:Section("Latest Updates")
+	sUpdates:Label("Changelog v3.0.0")
+	sUpdates:Label("· Rebuilt from the ground up for the latest version")
+	sUpdates:Label("· Auto Mine stands beside rocks instead of hiding under them")
+	sUpdates:Label("· Travel walks the real route at full speed")
+
+	local gExec = tHome:AddGrid()
+	local sExec = gExec:Section("Executor")
+	sExec:Label("Executor: Delta")
+	local sStatus = gExec:Section("Status")
+	sStatus:Label("Client FPS: live")
+	sStatus:Label("Server ping: live")
+
+	-- ── Core tabs ────────────────────────────────────────────────────────
+	local tPlayer = window:AddTab("Player", "player")
+	local tCombat = window:AddTab("Combat", "combat")
+	local tFarm = window:AddTab("Farm", "farm")
+	local tGather = window:AddTab("Gathering", "gathering")
+	local tLoot = window:AddTab("Loot", "loot")
+	local tExam = window:AddTab("Exam", "exam")
+	local tProg = window:AddTab("Progression", "progression")
+	local tTP = window:AddTab("Teleport", "teleport")
+	local tVis = window:AddTab("Visuals", "visuals")
+	local tSet = window:AddTab("Settings", "settings")
+
+	window:SelectTab("Home")
 
 	local sMove = tPlayer:Section("Movement")
 	C.noclip = sMove:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
