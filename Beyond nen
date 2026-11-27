@@ -1,7 +1,6 @@
--- Zentynal Hub - protected diagnostic build
--- This build catches runtime errors and prints the actual source traceback.
+-- Zentynal Hub 
 local __zentynal_ok, __zentynal_err = xpcall(function()
-    print("[Zentynal Hub] protected startup begin")
+    print("[Zentynal Hub]m")
 -- Zentynal Hub
 
 local Players = game:GetService("Players")
@@ -2393,5 +2392,5 @@ end)
 if not __zentynal_ok then
     warn("[Zentynal Hub] RUNTIME ERROR TRACEBACK:\n" .. tostring(__zentynal_err))
 else
-    print("[Zentynal Hub] protected startup completed")
+    print("[Zentynal Hub] protected startup complet")
 end
