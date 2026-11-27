@@ -12,11 +12,38 @@ local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
+-- Global State
+local dead = false
+local farmOn, farmTarget, auraOn = false, "Forest Brawler", false
+local farmFloat, farmDodge, farmPos, farmDist, farmYOff = true, true, "Above", 8, 0
+local farmMob, farmMobSwingUntil, farmMobWatch = nil, 0, nil
+local noclipOn, flyOn, infJumpOn, clickTPOn = false, false, false, false
+local flySpeed, wsOn, wsVal = 60, false, 16
+local alertOn, lastAlert = false, 0
+local medOn, medBusy, medOwned = false, false, false
+local mineOn, minePri1, minePri2 = false, "None", "None"
+local fishOn, fishSession = false, nil
+local autoSellOn, autoSellKeep = false, {}
+local autoStatsOn, statChoice = false, "StrengthStat"
+local talentOn, talentReroll, talentMin = false, false, "Rare"
+local bossOn, bossEnabled = false, {}
+local chestOn, nodeMasterOn, sniperOn = false, false, false
+local autoExamOn, examFightMobs = false, true
+local examSpeed, lastPromptId = 40, nil
+local autoWeapon, weaponChoice = false, nil
+local autoQuest, questId = false, "KillForestBrawler"
+local parryOn, lastParry, parryRange, parryDelay = false, 0, 16, 0.32
+local skillOn, gripOn = false, false
+local espOn = {players=false, mobs=false, chests=false, bosses=false}
+local C, connections, injected = {}, {}, {}
+local watched, espObjs = {}, {}
+local getCombat, face, examGetup, unpinnedExamSpeed, setSprint, mazeRoute
+local neededNodes
+
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
 ENV.YourNenHub = ENV.YourNenHub or nil
 if ENV.YourNenHub and ENV.YourNenHub.Destroy then pcall(ENV.YourNenHub.Destroy) end
 
--- Clean up old GUIs
 task.defer(function()
 	local ok, hui = pcall(function() return gethui() end)
 	if not (ok and hui) then return end
@@ -28,7 +55,6 @@ task.defer(function()
 end)
 
 local function isFn(x) return type(x) == "function" end
-local connections, injected = {}, {}
 local function bind(c) connections[#connections+1] = c return c end
 local function track(i) injected[#injected+1] = i return i end
 
@@ -97,7 +123,6 @@ if not lib then
 	error("[YourNenHub] UI library failed to load.")
 end
 
--- Rebrand the window
 local window = lib:CreateWindow({
 	Title = "YourNenHub", Subtitle = "Beyond Nen",
 	ToggleKey = Enum.KeyCode.RightShift, Name = "YourNenHub",
@@ -105,7 +130,6 @@ local window = lib:CreateWindow({
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
 
--- Character & Service Helpers
 local function char() return lp.Character end
 local function hrp()
 	local c = char(); return c and c:FindFirstChild("HumanoidRootPart")
@@ -123,6 +147,7 @@ local CN = RS:FindFirstChild("CombatNet")
 local cn = { rid = 0, combo = 1, lastDecision = 0 }
 local function nextRid() cn.rid = cn.rid + 1 return cn.rid end
 local bindCNLate
+
 local function bindDecision(f)
 	bind(f.Decision.OnClientEvent:Connect(function(rid, ok, reason, expected)
 		if not ok then
@@ -137,6 +162,7 @@ local function bindDecision(f)
 		end
 	end))
 end
+
 if CN then bindDecision(CN) end
 bind(RS.ChildAdded:Connect(function(c)
 	if c.Name == "CombatNet" and not CN then
@@ -204,7 +230,6 @@ local function tryGameRequire(mod)
 	return (ok3 and res3 ~= nil) and res3 or nil
 end
 
-local getCombat, face
 local Knit
 local function knitSvc(name)
 	if not Knit then
@@ -215,6 +240,7 @@ local function knitSvc(name)
 	local ok, s = pcall(function() return Knit.GetService(name) end)
 	return ok and s or nil
 end
+
 local function callSvc(name, m, ...)
 	local args = {...}
 	local s = knitSvc(name)
@@ -269,9 +295,6 @@ local function setAntiAFK(on)
 	elseif not on and afkConn then afkConn:Disconnect() afkConn = nil end
 end
 
-local noclipOn, flyOn, infJumpOn, clickTPOn = false, false, false, false
-local flySpeed, wsOn, wsVal = 60, false, 16
-
 bind(RunService.Stepped:Connect(function()
 	local farmNoclip = farmOn and farmFloat
 	if (noclipOn or farmNoclip) and char() then
@@ -308,9 +331,6 @@ bind(RunService.Heartbeat:Connect(function()
 	if wsOn and hum() and hum().WalkSpeed ~= wsVal then hum().WalkSpeed = wsVal end
 end))
 
-local C = {}
-local farmOn, farmTarget, auraOn, dead = false, "Forest Brawler", false, false
-
 local function mobNames()
 	local players = {}
 	for _, p in pairs(game.Players:GetPlayers()) do players[p.Name] = true end
@@ -339,9 +359,7 @@ local function mobNames()
 end
 
 local MOB_LIST = mobNames()
-local farmPos, farmDist, farmFloat = "Above", 8, true
-local farmYOff = 0
-local farmMob = nil
+
 local questBusy = false
 local function farmCF(mob)
 	local mp = mob:GetPivot()
@@ -363,9 +381,6 @@ local function landToGround()
 	farmMob = nil
 end
 
-local farmDodge = true
-local farmMobSwingUntil = 0
-local farmMobWatch = nil
 task.spawn(function()
 	while not dead do
 		if farmMob ~= farmMobWatch then
@@ -432,7 +447,6 @@ task.spawn(function()
 	end
 end)
 
-local questId, autoQuest = "KillForestBrawler", false
 local QUEST_BOARD = {
 	{"Whale Island Town", "KillForestBrawler", "KillCaveBrawler"},
 	{"Mines", "KillBigZombie", "KillGreenGoblin", "KillMoleRat", "KillStoneEye", "KillStoneSoldier", "KillZombie"},
@@ -561,13 +575,11 @@ task.spawn(function()
 end)
 
 local farmHold = false
-local bossOn = false
 local BOSS_SEED = {
 	"Beach King", "Master of the Swamp", "Sandy Storm", "Crimson Flame",
 	"Stone Eye", "Black Blick", "Dracolith", "Frost Fang", "The Last Kurta",
 	"Fox Bear", "Mole Rat", "Fake Stone Eye", "Chief Farmer", "Fire Master",
 }
-local bossEnabled = {}
 for _, n in ipairs(BOSS_SEED) do bossEnabled[n] = true end
 local function isBossModel(m)
 	return m:GetAttribute("IsBoss") == true or m:GetAttribute("Boss") == true
@@ -593,7 +605,6 @@ local function farmTargetNow()
 	return farmTarget
 end
 
-local chestOn = false
 task.spawn(function()
 	while not dead do
 		if chestOn and char() then
@@ -654,7 +665,6 @@ task.spawn(function()
 	end
 end)
 
-local parryOn, lastParry, parryRange, parryDelay = false, 0, 16, 0.32
 local function doParry()
 	if not CN then return end
 	if tick() - lastParry < 1.8 then return end
@@ -668,7 +678,7 @@ local function nearUs(m)
 	local ok2, mp = pcall(function() return (m:IsA("Model") and m:GetPivot() or m.CFrame).Position end)
 	return ok2 and (mp - h.Position).Magnitude <= parryRange
 end
-local watched = {}
+
 task.spawn(function()
 	while not dead do
 		if parryOn and char() then
@@ -706,7 +716,6 @@ function bindCNLate(f)
 end
 if CN then bindCNLate(CN) end
 
-local skillOn = false
 local function playerData()
 	local d = lp:FindFirstChild("Data")
 	local ss = d and d:FindFirstChild("SavesSlot")
@@ -744,7 +753,6 @@ task.spawn(function()
 	end
 end)
 
-local gripOn = false
 task.spawn(function()
 	while not dead do
 		if gripOn and farmMob and farmMob.Parent then
@@ -760,7 +768,6 @@ end)
 
 local RSShared = RS:FindFirstChild("Shared")
 local Items = tryGameRequire(RSShared and RSShared:FindFirstChild("Data") and RSShared.Data:FindFirstChild("InventoryItems"))
-local RARITY_ORDER2 = {Common=1, Uncommon=2, Rare=3, Special=4, Legendary=5, Mythical=6, Extraordinary=7}
 local function invFolder()
 	local d = lp:FindFirstChild("Data")
 	local ss = d and d:FindFirstChild("SavesSlot")
@@ -806,7 +813,6 @@ local function weapons()
 	table.sort(out, function(a, b) return a.dmg > b.dmg end)
 	return out
 end
-local autoWeapon, weaponChoice = false, nil
 local function equipWeapon(name)
 	local c = char()
 	if not c then return false end
@@ -860,7 +866,6 @@ local function rarityOf(id)
 	local t = Talents and Talents.List and Talents.List[id]
 	return t and t.Rarity or "Common"
 end
-local talentOn, talentReroll, talentMin = false, false, "Rare"
 local function pendingChoice()
 	local ok, c = pcall(function() return svc("TalentService", "GetChoice"):InvokeServer() end)
 	if ok and type(c) == "table" and type(c.Hand) == "table" then return c end
@@ -895,7 +900,6 @@ task.spawn(function()
 	end
 end)
 
-local alertOn, lastAlert = false, 0
 task.spawn(function()
 	while not dead do
 		if alertOn and hrp() and tick() - lastAlert > 8 then
@@ -929,7 +933,6 @@ local function setFB(v)
 	end
 end
 
-local mineOn, minePri1, minePri2 = false, "None", "None"
 local ORE_NAMES = {
 	["Lime Stone"]=true, ["Refined Stone"]=true, ["Aluminium"]=true, ["Iron"]=true,
 	["Gold"]=true, ["Ruby"]=true, ["Nen Crystal"]=true, ["Ocean Crystal"]=true,
@@ -1003,7 +1006,6 @@ task.spawn(function()
 	end
 end)
 
-local autoSellOn, autoSellKeep = false, {}
 local SELLABLE_ORES = {"Wood","Lime Stone","Refined Stone","Aluminium","Iron","Gold","Ruby","Nen Crystal","Ocean Crystal","Ruby Crystal","Charged Crystal","Fire Essence","Frost Stone"}
 local function sellOresOnce()
 	local c = char()
@@ -1058,7 +1060,6 @@ task.spawn(function()
 	end
 end)
 
-local fishOn, fishSession = false, nil
 pcall(function()
 	bind(svc("FishingService", "Cast").Parent.Parent.RE.Bite.OnClientEvent:Connect(function(id)
 		fishSession = id or fishSession
@@ -1084,9 +1085,6 @@ task.spawn(function()
 	end
 end)
 
-local medOn = false
-local medBusy = false
-local medOwned = false
 local MED_RNG = Random.new()
 
 local function medSvc() return svc("MeditationService", "StartMeditation").Parent.Parent end
@@ -1223,8 +1221,6 @@ task.spawn(function()
 	end
 end)
 
--- Node Master & Sniper
-local nodeMasterOn = false
 local function doNodeMaster()
 	local nen = workspace:FindFirstChild("World") and workspace.World:FindFirstChild("Nen")
 	local cw = nen and nen:FindFirstChild("current_wizard")
@@ -1266,8 +1262,6 @@ task.spawn(function()
 	end
 end)
 
-local sniperOn = false
-local neededNodes
 do
 	local SNIPER_DIR = "YourNenHub"
 	local function sniperSeenPath() return SNIPER_DIR .. "/node_sniper_seen.json" end
@@ -1378,7 +1372,6 @@ do
 	end)
 end
 
-local autoStatsOn, statChoice = false, "StrengthStat"
 task.spawn(function()
 	while not dead do
 		if autoStatsOn and (lp:GetAttribute("StatsPoints") or 0) > 0 then
@@ -1390,12 +1383,6 @@ task.spawn(function()
 	end
 end)
 
--- Hunter Exam
-local autoExamOn, examFightMobs = false, true
-local examSpeed = 40
-local lastPromptId
-local combatMod
-local examGetup, unpinnedExamSpeed, setSprint, mazeRoute
 do
 local baseSpeed
 getCombat = function()
@@ -1417,6 +1404,7 @@ getCombat = function()
 	end
 	return nil
 end
+local combatMod
 local function myPlot()
 	local w = workspace:FindFirstChild("World")
 	local mp = w and w:FindFirstChild("MazePlots")
@@ -1792,7 +1780,6 @@ task.spawn(function()
 end)
 end
 
--- Config System (Missing previously, added here)
 local CFG_DIR = "YourNenHub"
 local CFG_LAST = CFG_DIR .. "/_last.txt"
 local curConfig = "default"
@@ -1856,7 +1843,7 @@ local function loadConfig(name)
 	if not (ok and type(d) == "table") then return end
 	curConfig = name
 	markLast(name)
-	task.delay(0.8, function() -- apply after the deferred UI build exists
+	task.delay(0.8, function()
 		for k, v in pairs(d) do
 			if k == "espOn" and type(v) == "table" then
 				for n, on in pairs(v) do
@@ -1899,9 +1886,8 @@ if queueTP then
 	pcall(function() queueTP('local s; if type(isfile)=="function" then for _,p in pairs({"QA Scripts/YourNenHub.lua","YourNenHub.lua"}) do if isfile(p) then s=readfile(p) break end end end; if s then loadstring(s)() end') end)
 end
 
--- ESP
-local espOn = {players=false, mobs=false, chests=false, bosses=false}
-local espObjs = {}
+local mobNamesList = {"Forest Brawler","Cave Brawler","Foxbear Hunter","Mole Rat","Black Blick","Stone Eye","Sandy Storm","Crimson Flame","Fox Bear"}
+local bossNames = {"Master of the Swamp","Beach King"}
 local function clearESP()
 	for _,o in pairs(espObjs) do pcall(function() o:Destroy() end) end
 	espObjs = {}
@@ -1916,8 +1902,6 @@ local function tagESP(inst, text, color)
 	local hl = Instance.new("Highlight"); hl.Name = "BNH_ESP"; hl.FillColor = color; hl.FillTransparency = 0.85; hl.OutlineColor = color; hl.Parent = inst
 	track(bb); track(hl); espObjs[#espObjs+1] = bb; espObjs[#espObjs+1] = hl
 end
-local mobNamesList = {"Forest Brawler","Cave Brawler","Foxbear Hunter","Mole Rat","Black Blick","Stone Eye","Sandy Storm","Crimson Flame","Fox Bear"}
-local bossNames = {"Master of the Swamp","Beach King"}
 local function refreshESP()
 	clearESP()
 	for _, p in pairs(Players:GetPlayers()) do
@@ -1956,7 +1940,6 @@ task.spawn(function()
 	end
 end)
 
--- UI Build
 task.delay(0.5, function()
 	local tPlayer = window:AddTab("Player")
 	local tCombat = window:AddTab("Combat")
@@ -2369,4 +2352,3 @@ ENV.BNH = {
 	end,
 }
 print("[YourNenHub] hub loaded")
-end
