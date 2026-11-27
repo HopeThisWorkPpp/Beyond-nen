@@ -1,6 +1,6 @@
 --[[
     Zentynal UI Library V6
-    Refactored for performance, zero input leaks, and premium aesthetics.
+    Mint Green Theme, Mobile Responsive, Zero Memory Leaks.
 ]]
 
 local Players = game:GetService("Players")
@@ -15,7 +15,26 @@ local LIB_NAME = "Zentynal"
 local LOGO_ASSET = "rbxassetid://114884658309823"
 local LOGO_FILE = "Zentynal/logo.png"
 
--- Utility: Viewport & Device
+-- ── THEME (Mint Green) ───────────────────────────────────────────────────
+local Theme = {
+	bg = Color3.fromRGB(10, 14, 12),
+	panel = Color3.fromRGB(16, 24, 20),
+	panelAlt = Color3.fromRGB(24, 36, 30),
+	sidebar = Color3.fromRGB(8, 12, 10),
+	stroke = Color3.fromRGB(40, 60, 50),
+	accent = Color3.fromRGB(52, 211, 153),
+	accentDim = Color3.fromRGB(16, 185, 129),
+	mint = Color3.fromRGB(52, 211, 153),
+	cyan = Color3.fromRGB(167, 243, 208),
+	rose = Color3.fromRGB(248, 113, 113),
+	text = Color3.fromRGB(240, 255, 248),
+	textDim = Color3.fromRGB(148, 176, 160),
+	off = Color3.fromRGB(34, 48, 40),
+	tabIdle = Color3.fromRGB(8, 12, 10),
+	tabHover = Color3.fromRGB(28, 44, 36),
+}
+
+-- ── UTILITIES ────────────────────────────────────────────────────────────
 local function isCompact()
 	local cam = workspace.CurrentCamera
 	local vs = cam and cam.ViewportSize or Vector2.new(1280, 720)
@@ -39,25 +58,6 @@ local function pointer01(gui, input)
 	local size = gui.AbsoluteSize
 	return math.clamp((p.X - abs.X) / math.max(1, size.X), 0, 1), math.clamp((p.Y - abs.Y) / math.max(1, size.Y), 0, 1)
 end
-
--- Theme
-local Theme = {
-	bg = Color3.fromRGB(12, 10, 18),
-	panel = Color3.fromRGB(18, 14, 26),
-	panelAlt = Color3.fromRGB(28, 22, 40),
-	sidebar = Color3.fromRGB(10, 8, 16),
-	stroke = Color3.fromRGB(52, 40, 72),
-	accent = Color3.fromRGB(168, 85, 247),
-	accentDim = Color3.fromRGB(126, 58, 196),
-	mint = Color3.fromRGB(52, 211, 153),
-	cyan = Color3.fromRGB(196, 181, 253),
-	rose = Color3.fromRGB(248, 113, 113),
-	text = Color3.fromRGB(244, 240, 255),
-	textDim = Color3.fromRGB(156, 148, 176),
-	off = Color3.fromRGB(42, 34, 56),
-	tabIdle = Color3.fromRGB(10, 8, 16),
-	tabHover = Color3.fromRGB(32, 24, 48),
-}
 
 local function parentGui(gui)
 	local function protect(inst)
@@ -141,11 +141,10 @@ local function pressPunch(gui)
 	tween(s, { Scale = 1 }, 0.22, Enum.EasingStyle.Back)
 end
 
--- Custom Logo Handling (Fallback Logic)
 local brandImage = nil
 local function getBrandImage()
 	if brandImage ~= nil then return brandImage end
-	brandImage = LOGO_ASSET -- Default to Roblox asset
+	brandImage = LOGO_ASSET
 	pcall(function()
 		if typeof(isfile) ~= "function" or typeof(getcustomasset) ~= "function" then return end
 		if isfile(LOGO_FILE) then
@@ -184,7 +183,7 @@ local function makeBrand(parent, size, z)
 	return wrap
 end
 
--- Central Input Engine (Fixes memory leaks)
+-- ── INPUT MANAGER (Memory Leak Fix) ──────────────────────────────────────
 local InputManager = {
 	activeDrag = nil,
 	connections = {},
@@ -202,9 +201,7 @@ function InputManager:Init()
 	end))
 	table.insert(self.connections, UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if self.activeDrag then
-				self.activeDrag = nil
-			end
+			if self.activeDrag then self.activeDrag = nil end
 		end
 	end))
 end
@@ -214,203 +211,37 @@ function InputManager:StartDrag(callback)
 	self.activeDrag = callback
 end
 
-function InputManager:StopDrag()
-	self.activeDrag = nil
-end
-
--- Cleanup Manager
+-- ── CLEANUP ──────────────────────────────────────────────────────────────
 local Maid = {}
 Maid.__index = Maid
 function Maid.new() return setmetatable({ tasks = {} }, Maid) end
-function Maid:Add(item)
-	table.insert(self.tasks, item)
-	return item
-end
+function Maid:Add(item) table.insert(self.tasks, item) return item end
 function Maid:Clean()
 	for _, item in ipairs(self.tasks) do
-		if typeof(item) == "Instance" then
-			pcall(function() item:Destroy() end)
-		elseif typeof(item) == "RBXScriptConnection" then
-			pcall(function() item:Disconnect() end)
-		elseif type(item) == "function" then
-			pcall(item)
-		end
+		if typeof(item) == "Instance" then pcall(function() item:Destroy() end)
+		elseif typeof(item) == "RBXScriptConnection" then pcall(function() item:Disconnect() end)
+		elseif type(item) == "function" then pcall(item) end
 	end
 	self.tasks = {}
 end
 
-local Library = {
-	Theme = Theme,
-	Windows = {},
-	Maid = Maid,
-}
+local Library = { Theme = Theme, Windows = {}, Maid = Maid }
 local activeDropdownClose = nil
+function Library.SetTheme(patch) for k, v in pairs(patch or {}) do Theme[k] = v end end
 
-function Library.SetTheme(patch)
-	for k, v in pairs(patch or {}) do Theme[k] = v end
-end
-
--- Loading Screen (Splash)
-local loadingGui, loadingText, loadingFill, loadingDots, loadingLabel = nil, nil, nil, nil, ""
-local loadingMaid = Maid.new()
-
-local function findNamedGui(name)
-	local found
-	pcall(function()
-		if typeof(gethui) == "function" then
-			local ok, hui = pcall(gethui)
-			if ok and hui then found = hui:FindFirstChild(name) end
-		end
-	end)
-	if not found then pcall(function() found = game:GetService("CoreGui"):FindFirstChild(name) end) end
-	if not found then
-		local pg = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
-		found = pg and pg:FindFirstChild(name)
-	end
-	return found
-end
-
-function Library.HideLoading()
-	loadingDots = false
-	if loadingGui then pcall(function() loadingGui:Destroy() end) end
-	loadingGui, loadingText, loadingFill = nil, nil, nil
-	loadingMaid:Clean()
-end
-
-function Library.SetLoading(msg)
-	loadingLabel = tostring(msg or ""):gsub("%.+$", "")
-	if loadingText then
-		loadingText.Text = loadingLabel .. "..."
-		loadingText.TextColor3 = Theme.textDim
-	end
-	if loadingFill then
-		loadingFill.Size = UDim2.new(0, 0, 1, 0)
-		tween(loadingFill, { Size = UDim2.new(1, 0, 1, 0) }, 0.9, Enum.EasingStyle.Quart)
-	end
-end
-
-function Library.FailLoading(msg)
-	loadingDots = false
-	local text = tostring(msg or "Failed to load")
-	if loadingText then
-		loadingText.Text = text
-		loadingText.TextColor3 = Theme.rose
-	else
-		warn("[Zentynal] " .. text)
-	end
-	task.delay(6, function() Library.HideLoading() end)
-end
-
-function Library.ShowLoading(opts)
-	opts = opts or {}
-	Library.HideLoading()
-	local old = findNamedGui(LIB_NAME .. "Loading")
-	if old then pcall(function() old:Destroy() end) end
-	
-	local splash = mk("ScreenGui", {
-		Name = LIB_NAME .. "Loading",
-		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
-		DisplayOrder = 200000,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-	})
-	pcall(function() splash.ClipToDeviceSafeArea = false end)
-	
-	local overlay = mk("Frame", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.22,
-		BorderSizePixel = 0,
-	}, splash)
-	
-	local vs = viewportSize()
-	local scale = math.clamp(math.min(vs.X / 420, vs.Y / 320), 0.72, 1.15)
-	local card = mk("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(math.floor(300 * scale), math.floor(176 * scale)),
-		BackgroundColor3 = Theme.panel,
-		BorderSizePixel = 0,
-	}, overlay)
-	corner(card, 14)
-	stroke(card, Theme.accent, 1, 0.25)
-	
-	-- Top gradient
-	local topGrad = mk("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 3),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-		BorderSizePixel = 0,
-	}, card)
-	mk("UIGradient", {
-		Color = ColorSequence.new(Theme.accent, Theme.mint),
-	}, topGrad)
-	
-	local badge = makeBrand(card, 42, 21)
-	badge.AnchorPoint = Vector2.new(0.5, 0)
-	badge.Position = UDim2.new(0.5, 0, 0, 28)
-	
-	mk("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(16, 80),
-		Size = UDim2.new(1, -32, 0, 24),
-		Font = Enum.Font.GothamBold,
-		TextSize = 18,
-		TextColor3 = Theme.text,
-		Text = tostring(opts.Title or LIB_NAME),
-	}, card)
-	
-	loadingText = mk("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(16, 104),
-		Size = UDim2.new(1, -32, 0, 16),
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = Theme.textDim,
-		Text = "Loading...",
-	}, card)
-	
-	local track = mk("Frame", {
-		Position = UDim2.fromOffset(28, 136),
-		Size = UDim2.new(1, -56, 0, 6),
-		BackgroundColor3 = Theme.off,
-		BorderSizePixel = 0,
-	}, card)
-	corner(track, 3)
-	loadingFill = mk("Frame", {
-		Size = UDim2.new(0, 0, 1, 0),
-		BackgroundColor3 = Theme.accent,
-		BorderSizePixel = 0,
-	}, track)
-	corner(loadingFill, 3)
-	mk("UIGradient", { Color = ColorSequence.new(Theme.accent, Theme.mint) }, loadingFill)
-	
-	loadingGui = splash
-	parentGui(splash)
-	loadingDots = true
-	task.spawn(function()
-		local n = 0
-		while loadingDots and loadingText and loadingText.Parent do
-			n = (n % 3) + 1
-			if loadingLabel ~= "" then
-				loadingText.Text = loadingLabel .. string.rep(".", n)
-			end
-			task.wait(0.28)
-		end
-	end)
-	Library.SetLoading(opts.Text or "Loading")
-	return splash
-end
-
--- ── WINDOW CREATION ────────────────────────────────────────────────────────
-
+-- ── WINDOW CREATION ──────────────────────────────────────────────────────
 function Library.CreateWindow(opts)
 	opts = opts or {}
 	local title = tostring(opts.Title or LIB_NAME)
 	local subtitle = tostring(opts.Subtitle or "")
 	local compact = isCompact()
-	local size = opts.Size or UDim2.fromOffset(840, 560)
+	
+	-- Default size with mobile scaling
+	local baseW, baseH = 840, 560
+	local vs = viewportSize()
+	local maxW = math.max(300, vs.X - 24)
+	local maxH = math.max(260, vs.Y - 48)
+	local size = UDim2.fromOffset(math.min(baseW, maxW), math.min(baseH, maxH))
 	
 	local toggleKeys = {}
 	local function addToggleKey(key)
@@ -424,9 +255,7 @@ function Library.CreateWindow(opts)
 	addToggleKey(opts.ToggleKey)
 	if #toggleKeys == 0 then addToggleKey(Enum.KeyCode.RightShift) end
 	
-	local winMaid = Library.Maid.new()
 	local screenParent = parentGui()
-	
 	local screen = mk("ScreenGui", {
 		Name = LIB_NAME .. "Window",
 		ResetOnSpawn = false,
@@ -435,7 +264,6 @@ function Library.CreateWindow(opts)
 		IgnoreGuiInset = true,
 		Enabled = false,
 	}, screenParent)
-	winMaid:Add(screen)
 	
 	local root = mk("Frame", {
 		Name = "Root",
@@ -452,7 +280,6 @@ function Library.CreateWindow(opts)
 	corner(root, 12)
 	stroke(root, Theme.stroke, 1, 0.2)
 	
-	-- Top Gradient Accent
 	local topLine = mk("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 0),
@@ -461,20 +288,10 @@ function Library.CreateWindow(opts)
 		BorderSizePixel = 0,
 		ZIndex = 11,
 	}, root)
-	mk("UIGradient", {
-		Color = ColorSequence.new(Theme.accent, Theme.mint),
-	}, topLine)
+	mk("UIGradient", { Color = ColorSequence.new(Theme.accent, Theme.cyan) }, topLine)
 	
 	local openScale = mk("UIScale", { Name = "OpenScale", Scale = 1 }, root)
-	local popupLayer = screen
-	
-	-- Layout: Body Row
-	local body = mk("Frame", {
-		Name = "BodyRow",
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 1, 0),
-		ZIndex = 20,
-	}, root)
+	local body = mk("Frame", { Name = "BodyRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 20 }, root)
 	
 	local SIDE_W = compact and 148 or 200
 	local sidebar = mk("Frame", {
@@ -494,7 +311,6 @@ function Library.CreateWindow(opts)
 		ZIndex = 3,
 	}, sidebar)
 	
-	-- Brand Row
 	local sideBrand = mk("Frame", {
 		Name = "BrandRow",
 		BackgroundTransparency = 1,
@@ -529,7 +345,6 @@ function Library.CreateWindow(opts)
 		ZIndex = 6,
 	}, sideBrand)
 	
-	-- Sidebar Nav
 	local sidebarNav = mk("ScrollingFrame", {
 		Name = "Nav",
 		BackgroundTransparency = 1,
@@ -548,7 +363,6 @@ function Library.CreateWindow(opts)
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 	}, sidebarNav)
 	
-	-- Content Area
 	local content = mk("Frame", {
 		Name = "Content",
 		BackgroundColor3 = Theme.bg,
@@ -597,7 +411,6 @@ function Library.CreateWindow(opts)
 		ClipsDescendants = true,
 	}, content)
 	
-	-- Window Object
 	local window = {
 		Screen = screen,
 		Root = root,
@@ -607,11 +420,8 @@ function Library.CreateWindow(opts)
 		_open = false,
 	}
 	
-	closeBtn.MouseButton1Click:Connect(function()
-		window:SetOpen(false)
-	end)
+	closeBtn.MouseButton1Click:Connect(function() window:SetOpen(false) end)
 	
-	-- Open / Close Logic
 	function window:SetOpen(visible)
 		if self._open == visible then return end
 		self._open = visible
@@ -626,7 +436,6 @@ function Library.CreateWindow(opts)
 		end
 	end
 	
-	-- Top-level Tab Creation
 	function window:AddTab(name)
 		name = tostring(name)
 		local btn = mk("TextButton", {
@@ -671,13 +480,7 @@ function Library.CreateWindow(opts)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}, page)
 		
-		local tabApi = {
-			Name = name,
-			Button = btn,
-			Page = page,
-			_sections = {}
-		}
-		
+		local tabApi = { Name = name, Button = btn, Page = page, _sections = {} }
 		function tabApi:Section(title)
 			local sec = createSection(page, title)
 			table.insert(self._sections, sec)
@@ -696,17 +499,12 @@ function Library.CreateWindow(opts)
 			pageTitle.Text = name
 		end
 		
-		btn.MouseButton1Click:Connect(function()
-			pressPunch(btn)
-			select()
-		end)
-		
+		btn.MouseButton1Click:Connect(function() pressPunch(btn) select() end)
 		self._tabs[name] = tabApi
 		if not self._active then select() end
 		return tabApi
 	end
 	
-	-- Notifications (Toasts)
 	local toastHold = mk("Frame", {
 		Name = "Toasts",
 		AnchorPoint = Vector2.new(1, 1),
@@ -725,7 +523,6 @@ function Library.CreateWindow(opts)
 	function window:Notify(opts)
 		local text = type(opts) == "table" and (opts.Text or opts.Title) or tostring(opts)
 		local color = type(opts) == "table" and (opts.Color or Theme.cyan) or Theme.cyan
-		
 		local toast = mk("Frame", {
 			BackgroundColor3 = Theme.panel,
 			BorderSizePixel = 0,
@@ -738,7 +535,6 @@ function Library.CreateWindow(opts)
 		local tStroke = stroke(toast, color, 1, 0.35)
 		tStroke.Transparency = 1
 		pad(toast, 10, 10, 12, 12)
-		
 		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 0, 0),
@@ -752,10 +548,8 @@ function Library.CreateWindow(opts)
 			TextTransparency = 1,
 			ZIndex = 82,
 		}, toast)
-		
 		TweenService:Create(toast, TweenInfo.new(0.18), { BackgroundTransparency = 0.05 }):Play()
 		TweenService:Create(tStroke, TweenInfo.new(0.18), { Transparency = 0.35 }):Play()
-		
 		task.delay(type(opts) == "table" and (opts.Duration or 3) or 3, function()
 			if not toast.Parent then return end
 			TweenService:Create(toast, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
@@ -765,7 +559,6 @@ function Library.CreateWindow(opts)
 		end)
 	end
 	
-	-- Dragging
 	do
 		local dragging, dragStart, startPos = false, nil, nil
 		sideBrand.InputBegan:Connect(function(input)
@@ -794,7 +587,6 @@ function Library.CreateWindow(opts)
 end
 
 -- ── UI COMPONENTS ────────────────────────────────────────────────────────
-
 function createSection(parent, title)
 	local card = mk("Frame", {
 		BackgroundColor3 = Theme.panel,
@@ -805,18 +597,9 @@ function createSection(parent, title)
 	corner(card, 16)
 	local cardStroke = stroke(card, Theme.stroke, 1, 0.55)
 	pad(card, 16, 16, 16, 16)
+	mk("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, card)
 	
-	mk("UIListLayout", {
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, card)
-	
-	local head = mk("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 28),
-		LayoutOrder = 0,
-	}, card)
-	
+	local head = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), LayoutOrder = 0 }, card)
 	mk("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 1, 0),
@@ -829,17 +612,11 @@ function createSection(parent, title)
 	
 	local order = 0
 	local api = { Instance = card }
-	
 	local function nextOrder() order += 1 return order end
 	
 	function api:Toggle(opts)
 		opts = opts or {}
-		local row = mk("Frame", {
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 32),
-			LayoutOrder = nextOrder(),
-		}, card)
-		
+		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 32), LayoutOrder = nextOrder() }, card)
 		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -56, 1, 0),
@@ -881,10 +658,7 @@ function createSection(parent, title)
 			if not silent and opts.Callback then opts.Callback(on) end
 		end
 		hoverScale(track, 1.04)
-		track.MouseButton1Click:Connect(function()
-			pressPunch(track)
-			ctrl:Set(not on, false)
-		end)
+		track.MouseButton1Click:Connect(function() pressPunch(track) ctrl:Set(not on, false) end)
 		return ctrl
 	end
 	
@@ -915,12 +689,7 @@ function createSection(parent, title)
 		opts = opts or {}
 		local minV, maxV = tonumber(opts.Min) or 0, tonumber(opts.Max) or 1
 		local value = math.clamp(tonumber(opts.Default) or minV, minV, maxV)
-		
-		local row = mk("Frame", {
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 40),
-			LayoutOrder = nextOrder(),
-		}, card)
+		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), LayoutOrder = nextOrder() }, card)
 		
 		mk("TextLabel", {
 			BackgroundTransparency = 1,
@@ -1002,7 +771,6 @@ function createSection(parent, title)
 		return ctrl
 	end
 	
-	-- Returns the section API
 	return api
 end
 
