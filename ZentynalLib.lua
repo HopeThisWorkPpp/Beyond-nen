@@ -1,14 +1,13 @@
 -- ZentynalLib.lua
--- Zentynal UI Library V6 (Full)
--- Drop-in replacement for YourNenHub's lib load.
+-- Zentynal UI Library V6 (Full + Polish)
+-- Drop-in for YourNenHub.
 -- Components: Toggle, Button, Slider, TextBox, Keybind, ColorPicker,
 -- Dropdown, Label, Paragraph, Icon headers, Tab search, Toasts,
--- Window drag, Mobile scaling, Popup layer.
+-- Window drag, Mobile scaling, Popup layer, Reopen pill.
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
@@ -44,10 +43,14 @@ end
 
 local Theme = {
 	bg = Color3.fromRGB(10, 14, 12),
+	bgHi = Color3.fromRGB(16, 22, 20),
 	panel = Color3.fromRGB(16, 24, 20),
+	panelHi = Color3.fromRGB(20, 30, 26),
 	panelAlt = Color3.fromRGB(24, 36, 30),
 	sidebar = Color3.fromRGB(8, 12, 10),
+	sidebarHi = Color3.fromRGB(14, 20, 17),
 	stroke = Color3.fromRGB(40, 60, 50),
+	strokeHi = Color3.fromRGB(60, 90, 74),
 	accent = Color3.fromRGB(52, 211, 153),
 	accentDim = Color3.fromRGB(16, 185, 129),
 	mint = Color3.fromRGB(52, 211, 153),
@@ -58,6 +61,7 @@ local Theme = {
 	off = Color3.fromRGB(34, 48, 40),
 	tabIdle = Color3.fromRGB(8, 12, 10),
 	tabHover = Color3.fromRGB(28, 44, 36),
+	selected = Color3.fromRGB(48, 36, 74),
 }
 
 local function parentGui(gui)
@@ -147,6 +151,23 @@ local function pressPunch(gui)
 	tween(s, { Scale = 1 }, 0.22, Enum.EasingStyle.Back)
 end
 
+local function makeShadow(parent, size, offsetStep)
+	for i = 1, 3 do
+		local off = offsetStep * i
+		local sh = mk("Frame", {
+			Name = "Shadow" .. i,
+			BackgroundColor3 = Color3.new(0, 0, 0),
+			BackgroundTransparency = 0.72 + i * 0.07,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, off, 0.5, off),
+			Size = size,
+			ZIndex = 10 - i,
+		}, parent)
+		corner(sh, 14)
+	end
+end
+
 local brandImage = nil
 local function getBrandImage()
 	if brandImage ~= nil then return brandImage end
@@ -176,13 +197,31 @@ local function makeBrand(parent, size, z)
 		ZIndex = z,
 	}, parent)
 	corner(wrap, math.floor(size * 0.5))
+	local grad = mk("UIGradient", {
+		Color = ColorSequence.new(Theme.accentDim, Theme.panelAlt),
+		Rotation = 45,
+	}, wrap)
+	grad.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(1, 0.95),
+	})
+	mk("TextLabel", {
+		Name = "BrandGlyph",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Font = Enum.Font.GothamBlack,
+		Text = "Z",
+		TextColor3 = Theme.accent,
+		TextSize = math.floor(size * 0.55),
+		ZIndex = z + 1,
+	}, wrap)
 	local img = mk("ImageLabel", {
 		Name = "LogoImage",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Image = getBrandImage(),
 		ScaleType = Enum.ScaleType.Fit,
-		ZIndex = z + 1,
+		ZIndex = z + 2,
 	}, wrap)
 	corner(img, math.floor(size * 0.5))
 	return wrap
@@ -249,6 +288,7 @@ local ICON_KIND = {
 	Precision = "sliders", Humanization = "dots", Box = "grid", Info = "list",
 	Combat = "crosshair", Farm = "circle", Movement = "bolt", Player = "home",
 	Main = "home", Stats = "list", Weapon = "sliders",
+	Gathering = "funnel", Loot = "drop", Exam = "shield",
 }
 
 local function mark(parent, props)
@@ -385,20 +425,33 @@ local function createSection(host, title)
 		AutomaticSize = Enum.AutomaticSize.Y,
 	}, host)
 	corner(card, 16)
+	mk("UIGradient", {
+		Color = ColorSequence.new(Theme.panel, Theme.panelHi),
+		Rotation = 45,
+	}, card)
 	local cardStroke = stroke(card, Theme.stroke, 1, 0.55)
 	pad(card, 16, 16, 16, 16)
-	card.MouseEnter:Connect(function() tween(cardStroke, { Color = Theme.accent, Transparency = 0.28 }, 0.18) end)
-	card.MouseLeave:Connect(function() tween(cardStroke, { Color = Theme.stroke, Transparency = 0.55 }, 0.22) end)
+	card.MouseEnter:Connect(function()
+		tween(cardStroke, { Color = Theme.accent, Transparency = 0.28 }, 0.18)
+	end)
+	card.MouseLeave:Connect(function()
+		tween(cardStroke, { Color = Theme.stroke, Transparency = 0.55 }, 0.22)
+	end)
 	mk("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, card)
 
 	local head = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), LayoutOrder = 0 }, card)
 	local iconBox = mk("Frame", {
-		BackgroundColor3 = Color3.fromRGB(36, 28, 54),
+		BackgroundColor3 = Color3.fromRGB(30, 44, 38),
 		BorderSizePixel = 0,
 		Size = UDim2.fromOffset(26, 26),
 		Position = UDim2.fromOffset(0, 1),
 	}, head)
 	corner(iconBox, 7)
+	stroke(iconBox, Theme.accentDim, 1, 0.55)
+	mk("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(40, 60, 50), Color3.fromRGB(20, 30, 26)),
+		Rotation = 45,
+	}, iconBox)
 	paintIcon(iconBox, title, Theme.accent)
 	mk("TextLabel", {
 		BackgroundTransparency = 1,
@@ -529,6 +582,10 @@ local function createSection(host, title)
 			LayoutOrder = nextOrder(),
 		}, card)
 		corner(btn, 9)
+		local btnGrad = mk("UIGradient", {
+			Color = ColorSequence.new(Theme.panelAlt, Theme.panel),
+			Rotation = 45,
+		}, btn)
 		stroke(btn, opts.Danger and Theme.rose or Theme.accentDim, 1, 0.45)
 		trackSearch(opts.Text, btn)
 		hoverScale(btn, 1.02)
@@ -536,8 +593,14 @@ local function createSection(host, title)
 			pressPunch(btn)
 			if opts.Callback then opts.Callback(btn) end
 		end)
-		btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = Theme.tabHover }, 0.14) end)
-		btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = Theme.panelAlt }, 0.2) end)
+		btn.MouseEnter:Connect(function()
+			tween(btn, { BackgroundColor3 = Theme.tabHover }, 0.14)
+			tween(btnGrad, { Rotation = 135 }, 0.3)
+		end)
+		btn.MouseLeave:Connect(function()
+			tween(btn, { BackgroundColor3 = Theme.panelAlt }, 0.2)
+			tween(btnGrad, { Rotation = 45 }, 0.3)
+		end)
 		return btn
 	end
 
@@ -596,6 +659,9 @@ local function createSection(host, title)
 			Size = UDim2.new((value - minV) / math.max(0.001, maxV - minV), 0, 1, 0),
 		}, bar)
 		corner(fill, 3)
+		mk("UIGradient", {
+			Color = ColorSequence.new(Theme.accentDim, Theme.cyan),
+		}, fill)
 		local knob = mk("Frame", {
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			BorderSizePixel = 0,
@@ -802,7 +868,7 @@ local function createSection(host, title)
 			}, openBtn)
 		end
 
-		local pop, svFill, hueFill, svCursor, hueCursor, curSwatch, rBox, gBox, bBox
+		local pop, svFill, svCursor, hueCursor, curSwatch, rBox, gBox, bBox
 
 		local function hueColor() return hsvToRgb(h, 1, 1) end
 		local function apply(silent)
@@ -832,7 +898,8 @@ local function createSection(host, title)
 			if not host then return end
 			pop = mk("Frame", { Name = "ColorPop", BackgroundColor3 = Theme.panel, BorderSizePixel = 0, Size = UDim2.fromOffset(278, 214), ZIndex = 120 }, host)
 			corner(pop, 12)
-			stroke(pop, Theme.stroke, 1, 0.25)
+			stroke(pop, Theme.accentDim, 1, 0.35)
+			mk("UIGradient", { Color = ColorSequence.new(Theme.panel, Theme.panelHi), Rotation = 45 }, pop)
 			local sv = mk("TextButton", { AutoButtonColor = false, BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(168, 168), Text = "", ZIndex = 121 }, pop)
 			corner(sv, 8)
 			svFill = mk("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), hueColor()) }, sv)
@@ -840,17 +907,13 @@ local function createSection(host, title)
 			corner(shade, 8)
 			mk("UIGradient", {
 				Color = ColorSequence.new(Color3.new(0, 0, 0), Color3.new(0, 0, 0)),
-				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0, 1),
-					NumberSequenceKeypoint.new(1, 0),
-				}),
+				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) }),
 				Rotation = 90,
 			}, shade)
 			svCursor = mk("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), Active = false, ZIndex = 123 }, shade)
 			pcall(function() svCursor.Interactable = false end)
 			corner(svCursor, 6)
 			stroke(svCursor, Color3.new(1, 1, 1), 2, 0)
-
 			local hue = mk("TextButton", { AutoButtonColor = false, BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.fromOffset(188, 12), Size = UDim2.fromOffset(16, 168), Text = "", ZIndex = 121 }, pop)
 			corner(hue, 6)
 			mk("UIGradient", {
@@ -869,7 +932,6 @@ local function createSection(host, title)
 			pcall(function() hueCursor.Interactable = false end)
 			corner(hueCursor, 4)
 			stroke(hueCursor, Color3.new(1, 1, 1), 1.5, 0)
-
 			local side = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(214, 12), Size = UDim2.fromOffset(52, 168), ZIndex = 121 }, pop)
 			mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 12), Font = Enum.Font.Gotham, Text = "Current", TextColor3 = Theme.textDim, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left }, side)
 			curSwatch = mk("Frame", { BackgroundColor3 = current, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 14), Size = UDim2.fromOffset(44, 36) }, side)
@@ -881,7 +943,6 @@ local function createSection(host, title)
 				h, s, v = rgbToHsv(original)
 				apply(false)
 			end)
-
 			local function chan(x, label)
 				local box = mk("TextBox", { BackgroundColor3 = Theme.panelAlt, BorderSizePixel = 0, Position = UDim2.fromOffset(x, 180), Size = UDim2.fromOffset(40, 22), Font = Enum.Font.Gotham, Text = "0", TextColor3 = Theme.text, TextSize = 11, ClearTextOnFocus = false, ZIndex = 122 }, pop)
 				corner(box, 5)
@@ -901,7 +962,6 @@ local function createSection(host, title)
 			rBox.FocusLost:Connect(fromBoxes)
 			gBox.FocusLost:Connect(fromBoxes)
 			bBox.FocusLost:Connect(fromBoxes)
-
 			local function readSv(input)
 				local x, y = pointer01(sv, input)
 				s = x
@@ -927,7 +987,6 @@ local function createSection(host, title)
 			bindDrag(sv, "sv")
 			bindDrag(shade, "sv")
 			bindDrag(hue, "hue")
-
 			apply(true)
 			pop.Position = UDim2.fromOffset(
 				math.clamp(preview.AbsolutePosition.X + 28, 12, 900),
@@ -948,8 +1007,7 @@ local function createSection(host, title)
 			local function hit(gui)
 				if not gui or not gui.Parent then return false end
 				local pos, size = gui.AbsolutePosition, gui.AbsoluteSize
-				return p.X >= pos.X and p.X <= pos.X + size.X
-					and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
+				return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
 			end
 			if not hit(pop) and not hit(openBtn) then closePop() end
 		end)
@@ -1000,14 +1058,11 @@ local function createSection(host, title)
 		local open = false
 		local itemH = 22
 		local host = popupLayer
-		if not host then
-			host = mk("Frame", { Name = "DropdownHost", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 350 }, row:FindFirstAncestorOfClass("ScreenGui") or row)
-			popupLayer = popupLayer or host
-		end
 		local catcher = mk("TextButton", { Name = "DropdownCatch", AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Text = "", Visible = false, ZIndex = 398 }, host)
 		local menu = mk("Frame", { Name = "DropdownMenu", BackgroundColor3 = Theme.panelAlt, BorderSizePixel = 0, Size = UDim2.fromOffset(200, 0), Visible = false, Active = true, ZIndex = 400, ClipsDescendants = true }, host)
 		corner(menu, 6)
 		stroke(menu, Theme.stroke, 1, 0.3)
+		mk("UIGradient", { Color = ColorSequence.new(Theme.panelAlt, Theme.panel), Rotation = 90 }, menu)
 		local list = mk("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.accentDim, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, Active = false, ZIndex = 401 }, menu)
 		pad(list, 3, 3, 3, 3)
 		mk("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder }, list)
@@ -1020,7 +1075,7 @@ local function createSection(host, title)
 			valueLabel.Text = value
 			for _, item in ipairs(itemButtons) do
 				local selected = item.Name == value
-				item.BackgroundColor3 = selected and Color3.fromRGB(48, 36, 74) or Theme.panelAlt
+				item.BackgroundColor3 = selected and Theme.selected or Theme.panelAlt
 				item.TextColor3 = selected and Theme.text or Theme.textDim
 				local tick = item:FindFirstChildWhichIsA("TextLabel")
 				if tick then tick.Text = selected and "✓" or "" end
@@ -1117,7 +1172,7 @@ local function createSection(host, title)
 				end)
 				item.MouseLeave:Connect(function()
 					local selected = item.Name == value
-					item.BackgroundColor3 = selected and Color3.fromRGB(48, 36, 74) or Theme.panelAlt
+					item.BackgroundColor3 = selected and Theme.selected or Theme.panelAlt
 					item.TextColor3 = selected and Theme.text or Theme.textDim
 					tick.Text = selected and "✓" or ""
 				end)
@@ -1200,8 +1255,10 @@ function Library.CreateWindow(opts)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = opts.DisplayOrder or 120000,
 		IgnoreGuiInset = true,
-		Enabled = false,
+		Enabled = true,
 	}, screenParent)
+
+	makeShadow(screen, size, 8)
 
 	local root = mk("Frame", {
 		Name = "Root",
@@ -1216,7 +1273,8 @@ function Library.CreateWindow(opts)
 		ZIndex = 10,
 	}, screen)
 	corner(root, 12)
-	stroke(root, Theme.stroke, 1, 0.2)
+	mk("UIGradient", { Color = ColorSequence.new(Theme.bg, Theme.bgHi), Rotation = 45 }, root)
+	stroke(root, Theme.strokeHi, 1, 0.55)
 
 	local topLine = mk("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1226,7 +1284,13 @@ function Library.CreateWindow(opts)
 		BorderSizePixel = 0,
 		ZIndex = 11,
 	}, root)
-	mk("UIGradient", { Color = ColorSequence.new(Theme.accent, Theme.cyan) }, topLine)
+	mk("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Theme.accentDim),
+			ColorSequenceKeypoint.new(0.5, Theme.accent),
+			ColorSequenceKeypoint.new(1, Theme.cyan),
+		}),
+	}, topLine)
 
 	local openScale = mk("UIScale", { Name = "OpenScale", Scale = 1 }, root)
 	local body = mk("Frame", { Name = "BodyRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 20 }, root)
@@ -1239,6 +1303,7 @@ function Library.CreateWindow(opts)
 		Size = UDim2.new(0, SIDE_W, 1, 0),
 		ClipsDescendants = true,
 	}, body)
+	mk("UIGradient", { Color = ColorSequence.new(Theme.sidebar, Theme.sidebarHi), Rotation = 90 }, sidebar)
 
 	mk("Frame", {
 		BackgroundColor3 = Theme.stroke,
@@ -1304,6 +1369,7 @@ function Library.CreateWindow(opts)
 	local content = mk("Frame", {
 		Name = "Content",
 		BackgroundColor3 = Theme.bg,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, SIDE_W, 0, 0),
 		Size = UDim2.new(1, -SIDE_W, 1, 0),
@@ -1394,9 +1460,30 @@ function Library.CreateWindow(opts)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, toastHold)
 
+	local reopen = mk("TextButton", {
+		Name = "Reopen",
+		AutoButtonColor = false,
+		BackgroundColor3 = Theme.panel,
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -16, 0, 72),
+		Size = UDim2.fromOffset(50, 50),
+		Text = "",
+		Visible = false,
+		ZIndex = 60,
+	}, screen)
+	corner(reopen, 25)
+	stroke(reopen, Theme.accent, 1, 0.35)
+	mk("UIGradient", { Color = ColorSequence.new(Theme.panel, Theme.panelHi), Rotation = 45 }, reopen)
+	local pillBrand = makeBrand(reopen, 32, 61)
+	pillBrand.AnchorPoint = Vector2.new(0.5, 0.5)
+	pillBrand.Position = UDim2.new(0.5, 0, 0.5, 0)
+	hoverScale(reopen, 1.08)
+
 	local window = {
 		Screen = screen,
 		Root = root,
+		Reopen = reopen,
 		Theme = Theme,
 		_tabs = {},
 		_tabOrder = {},
@@ -1408,19 +1495,21 @@ function Library.CreateWindow(opts)
 	closeBtn.MouseButton1Click:Connect(function() window:SetOpen(false) end)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { TextColor3 = Theme.rose }, 0.14) end)
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = Theme.textDim }, 0.16) end)
+	reopen.MouseButton1Click:Connect(function() pressPunch(reopen) window:Toggle() end)
 
 	function window:SetOpen(visible)
 		visible = visible and true or false
 		if self._open == visible then return end
 		self._open = visible
+		screen.Enabled = true
 		if visible then
-			screen.Enabled = true
 			root.Visible = true
+			reopen.Visible = false
 			openScale.Scale = 0.88
 			tween(openScale, { Scale = 1 }, 0.34, Enum.EasingStyle.Back)
 		else
-			screen.Enabled = false
 			root.Visible = false
+			reopen.Visible = true
 			if activeDropdownClose then pcall(activeDropdownClose, false) end
 			if activeColorClose then pcall(activeColorClose) end
 		end
@@ -1451,9 +1540,22 @@ function Library.CreateWindow(opts)
 		}, sidebarNav)
 		corner(btn, 10)
 
+		local accentBar = mk("Frame", {
+			Name = "AccentBar",
+			BackgroundColor3 = Theme.accent,
+			BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 0, 0.5, 0),
+			Size = UDim2.new(0, 3, 0, 20),
+			Visible = false,
+			ZIndex = 4,
+		}, btn)
+		corner(accentBar, 2)
+		mk("UIGradient", { Color = ColorSequence.new(Theme.accentDim, Theme.cyan), Rotation = 90 }, accentBar)
+
 		local iconBox = mk("Frame", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(12, 7),
+			Position = UDim2.fromOffset(14, 7),
 			Size = UDim2.fromOffset(26, 26),
 			ZIndex = 3,
 		}, btn)
@@ -1461,8 +1563,8 @@ function Library.CreateWindow(opts)
 
 		local label = mk("TextLabel", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(46, 0),
-			Size = UDim2.new(1, -50, 1, 0),
+			Position = UDim2.fromOffset(48, 0),
+			Size = UDim2.new(1, -52, 1, 0),
 			Font = Enum.Font.GothamMedium,
 			Text = name,
 			TextColor3 = Theme.textDim,
@@ -1488,10 +1590,10 @@ function Library.CreateWindow(opts)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}, page)
 
-		local tabApi = { Name = name, Button = btn, Page = page, _sections = {} }
+		local tabApi = { Name = name, Button = btn, Page = page, _sections = {}, _iconBox = iconBox, _accent = accentBar, _label = label }
 
-		function tabApi:Section(title)
-			local sec = createSection(page, title)
+		function tabApi:Section(sectionTitle)
+			local sec = createSection(page, sectionTitle)
 			table.insert(self._sections, sec)
 			return sec
 		end
@@ -1505,6 +1607,16 @@ function Library.CreateWindow(opts)
 			return any
 		end
 
+		local function paintIconColor(isSel)
+			for _, m in ipairs(iconBox:GetChildren()) do
+				if m.Name == "IconMark" then
+					m.BackgroundColor3 = isSel and Theme.accent or Theme.textDim
+					local st = m:FindFirstChildOfClass("UIStroke")
+					if st then st.Color = isSel and Theme.accent or Theme.textDim end
+				end
+			end
+		end
+
 		local function select()
 			for n, t in pairs(self._tabs) do
 				local isSel = n == name
@@ -1512,19 +1624,18 @@ function Library.CreateWindow(opts)
 					BackgroundColor3 = isSel and Theme.panelAlt or Theme.tabIdle,
 					BackgroundTransparency = isSel and 0 or 1,
 				}, 0.16)
-				local lbl = t.Button:FindFirstChildWhichIsA("TextLabel")
-				if lbl then tween(lbl, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16) end
-				local ib = t.Button:FindFirstChild("IconMark", true)
-				if not ib then
-					for _, c in ipairs(t.Button:GetChildren()) do
-						if c:IsA("Frame") and c:GetChildren()[1] and c:GetChildren()[1].Name == "IconMark" then
-							ib = c
-							break
-						end
+				if t._label then
+					tween(t._label, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16)
+				end
+				if t._accent then
+					t._accent.Visible = isSel
+					if isSel then
+						t._accent.Size = UDim2.new(0, 3, 0, 10)
+						tween(t._accent, { Size = UDim2.new(0, 3, 0, 20) }, 0.2)
 					end
 				end
-				if ib then
-					for _, m in ipairs(ib:GetChildren()) do
+				if t._iconBox then
+					for _, m in ipairs(t._iconBox:GetChildren()) do
 						if m.Name == "IconMark" then
 							m.BackgroundColor3 = isSel and Theme.accent or Theme.textDim
 							local st = m:FindFirstChildOfClass("UIStroke")
@@ -1541,10 +1652,14 @@ function Library.CreateWindow(opts)
 
 		btn.MouseButton1Click:Connect(function() pressPunch(btn) select() end)
 		btn.MouseEnter:Connect(function()
-			if self._active ~= name then tween(btn, { BackgroundTransparency = 0.6, BackgroundColor3 = Theme.tabHover }, 0.14) end
+			if self._active ~= name then
+				tween(btn, { BackgroundTransparency = 0.55, BackgroundColor3 = Theme.tabHover }, 0.14)
+			end
 		end)
 		btn.MouseLeave:Connect(function()
-			if self._active ~= name then tween(btn, { BackgroundTransparency = 1 }, 0.16) end
+			if self._active ~= name then
+				tween(btn, { BackgroundTransparency = 1 }, 0.16)
+			end
 		end)
 
 		self._tabs[name] = tabApi
@@ -1555,40 +1670,35 @@ function Library.CreateWindow(opts)
 
 	function window:SelectTab(name)
 		local t = self._tabs[name]
-		if t and t.Button then
-			for _, c in ipairs(t.Button:GetChildren()) do
-				if c:IsA("TextButton") and c ~= t.Button then end
-			end
-		end
-		local btn = t and t.Button
-		if btn then
-			local sig = btn.MouseButton1Click
-			if sig then
-				-- simulate click via firing
-				local fire = false
-				pcall(function()
-					fire = true
-					btn:SetAttribute("ForceSelect", true)
-					btn:SetAttribute("ForceSelect", nil)
-				end)
-			end
-		end
+		if not t then return end
 		for n, tt in pairs(self._tabs) do
 			local isSel = n == name
 			tween(tt.Button, {
 				BackgroundColor3 = isSel and Theme.panelAlt or Theme.tabIdle,
 				BackgroundTransparency = isSel and 0 or 1,
 			}, 0.16)
-			local lbl = tt.Button:FindFirstChildWhichIsA("TextLabel")
-			if lbl then tween(lbl, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16) end
+			if tt._label then tween(tt._label, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16) end
+			if tt._accent then
+				tt._accent.Visible = isSel
+				if isSel then
+					tt._accent.Size = UDim2.new(0, 3, 0, 10)
+					tween(tt._accent, { Size = UDim2.new(0, 3, 0, 20) }, 0.2)
+				end
+			end
+			if tt._iconBox then
+				for _, m in ipairs(tt._iconBox:GetChildren()) do
+					if m.Name == "IconMark" then
+						m.BackgroundColor3 = isSel and Theme.accent or Theme.textDim
+						local st = m:FindFirstChildOfClass("UIStroke")
+						if st then st.Color = isSel and Theme.accent or Theme.textDim end
+					end
+				end
+			end
 			tt.Page.Visible = isSel
 		end
 		self._active = name
 		pageTitle.Text = name
-		if self._search ~= "" then
-			local ta = self._tabs[name]
-			if ta and ta._applySearch then ta._applySearch(self._search) end
-		end
+		if self._search ~= "" and t._applySearch then t._applySearch(self._search) end
 	end
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -1610,33 +1720,48 @@ function Library.CreateWindow(opts)
 			ZIndex = 81,
 		}, toastHold)
 		corner(toast, 8)
-		local tStroke = stroke(toast, color, 1, 0.35)
-		tStroke.Transparency = 1
-		pad(toast, 10, 10, 12, 12)
-		mk("TextLabel", {
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			Font = Enum.Font.Gotham,
-			Text = text,
-			TextColor3 = Theme.text,
-			TextSize = 12,
-			TextWrapped = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextTransparency = 1,
+		local bar = mk("Frame", {
+			Name = "Bar",
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			Size = UDim2.new(0, 3, 1, 0),
 			ZIndex = 82,
 		}, toast)
-		TweenService:Create(toast, TweenInfo.new(0.18), { BackgroundTransparency = 0.05 }):Play()
-		TweenService:Create(tStroke, TweenInfo.new(0.18), { Transparency = 0.35 }):Play()
-		task.delay(dur, function()
+		corner(bar, 2)
+		local toastStroke = stroke(toast, color, 1, 0.4)
+		local lbl = mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(14, 10),
+			Size = UDim2.new(1, -22, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Font = Enum.Font.Gotham,
+			Text = tostring(text),
+			TextColor3 = Theme.text,
+			TextSize = 11,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 82,
+		}, toast)
+		toastStroke.Transparency = 1
+		lbl.TextTransparency = 1
+
+		tween(toast, { BackgroundTransparency = 0 }, 0.2)
+		tween(toastStroke, { Transparency = 0.4 }, 0.2)
+		tween(lbl, { TextTransparency = 0 }, 0.2)
+
+		task.delay(math.max(0.5, tonumber(dur) or 3), function()
 			if not toast.Parent then return end
-			TweenService:Create(toast, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
-			TweenService:Create(tStroke, TweenInfo.new(0.22), { Transparency = 1 }):Play()
-			task.wait(0.24)
+			tween(toast, { BackgroundTransparency = 1 }, 0.25)
+			tween(lbl, { TextTransparency = 1 }, 0.25)
+			tween(toastStroke, { Transparency = 1 }, 0.25)
+			tween(bar, { BackgroundTransparency = 1 }, 0.25)
+			task.wait(0.3)
 			if toast.Parent then toast:Destroy() end
 		end)
+		return toast
 	end
 
+	-- drag by brand row in sidebar
 	do
 		local dragging, dragStart, startPos = false, nil, nil
 		sideBrand.InputBegan:Connect(function(input)
@@ -1668,26 +1793,46 @@ function Library.CreateWindow(opts)
 		end)
 	end
 
+	-- toggle keys: CAS + UIS fallback
 	do
-		local function isFocused()
-			local box = UserInputService:GetFocusedTextBox()
-			return box ~= nil
+		local casName = "ZentynalToggle_" .. tostring(math.random(100000, 999999))
+		local function onToggle()
+			if UserInputService:GetFocusedTextBox() then return end
+			window:Toggle()
 		end
-		UserInputService.InputBegan:Connect(function(input)
+		local okCAS = pcall(function()
+			ContextActionService:BindActionAtPriority(
+				casName,
+				function(_, state)
+					if state == Enum.UserInputState.Begin then
+						onToggle()
+						return Enum.ContextActionResult.Sink
+					end
+					return Enum.ContextActionResult.Pass
+				end,
+				false,
+				Enum.ContextActionPriority.High.Value,
+				table.unpack(toggleKeys)
+			)
+		end)
+		local toggleConn = UserInputService.InputBegan:Connect(function(input)
 			if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-			if isFocused() then return end
 			for _, k in ipairs(toggleKeys) do
-				if input.KeyCode == k then
-					window:Toggle()
-					return
-				end
+				if input.KeyCode == k then onToggle() return end
 			end
 		end)
+		window._casName = casName
+		window._okCAS = okCAS
+		window._toggleConn = toggleConn
 	end
 
 	function window:Destroy()
 		if activeDropdownClose then pcall(activeDropdownClose, false) end
 		if activeColorClose then pcall(activeColorClose) end
+		if self._okCAS and self._casName then
+			pcall(function() ContextActionService:UnbindAction(self._casName) end)
+		end
+		if self._toggleConn then pcall(function() self._toggleConn:Disconnect() end) end
 		popupLayer = nil
 		if screen then pcall(function() screen:Destroy() end) end
 		for i, w in ipairs(Library.Windows) do
