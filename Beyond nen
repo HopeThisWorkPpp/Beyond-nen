@@ -71,49 +71,31 @@ if not isFn(firePP) then
 	end
 end
 
--- Load custom Zentynal UI Library (local-first, GitHub fallback)
+-- ── BULLETPROOF UI LOADER ────────────────────────────────────────────────
 local lib
-local function tryLoadLib(source, label)
-	if type(source) ~= "string" or #source < 1000 then return nil end
-	local fn, err = loadstring(source)
-	if type(fn) ~= "function" then
-		warn("[Zentynal Hub] lib compile fail (" .. tostring(label) .. "): " .. tostring(err))
-		return nil
-	end
-	local ok2, l = pcall(fn)
-	if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
-		return l
-	end
-	warn("[Zentynal Hub] lib runtime fail (" .. tostring(label) .. "): " .. tostring(l))
-	return nil
-end
+local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua"
+local ok, res = pcall(function() return game:HttpGet(url) end)
 
-if isFn(readfile) and isFn(isfile) then
-	for _, p in ipairs({"ZentynalLib.lua", "QA Scripts/ZentynalLib.lua", "Zentynal Hub/ZentynalLib.lua"}) do
-		local okF, exists = pcall(isfile, p)
-		if okF and exists then
-			local okR, data = pcall(readfile, p)
-			if okR and type(data) == "string" then
-				lib = tryLoadLib(data, "local:" .. p)
-				if lib then break end
-			end
+if ok and type(res) == "string" and #res > 1000 then
+	local fn, err = loadstring(res)
+	if type(fn) == "function" then
+		local ok2, l = pcall(fn)
+		if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
+			lib = l
+		else
+			warn("[Zentynal Hub] Lib runtime fail: " .. tostring(l))
 		end
-	end
-end
-
-if not lib then
-	local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/refs/heads/main/ZentynalLib.lua"
-	local ok, res = pcall(function() return game:HttpGet(url) end)
-	if ok and type(res) == "string" and #res > 1000 and not res:match("^%s*<") then
-		lib = tryLoadLib(res, "github")
 	else
-		warn("[Zentynal Hub] GitHub fetch failed or returned non-Lua content.")
+		warn("[Zentynal Hub] Lib compile fail: " .. tostring(err))
 	end
+else
+	warn("[Zentynal Hub] GitHub fetch failed.")
 end
 
 if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib. Please save ZentynalLib.lua next to this script.")
+	error("[Zentynal Hub] Failed to load ZentynalLib. Ensure the GitHub URL is correct and the file is pushed.")
 end
+-- ─────────────────────────────────────────────────────────────────────────
 
 local window = lib.CreateWindow({
 	Title = "Zentynal",
@@ -338,7 +320,7 @@ local function mobNames()
 	for _, m in pairs(workspace:GetChildren()) do
 		if m:IsA("Model") and m:FindFirstChildOfClass("Humanoid") then add(m.Name) end
 	end
-	for _, fn in pairs({"RoamingNpcs", "NpcZones", "Humanoids", "NpcSpawnPoints", "KillSpawnAnchors"}) do
+	for _, fn in ipairs({"RoamingNpcs", "NpcZones", "Humanoids", "NpcSpawnPoints", "KillSpawnAnchors"}) do
 		local f = workspace:FindFirstChild(fn) or RS:FindFirstChild(fn)
 		if f then
 			for _, c in pairs(f:GetDescendants()) do
@@ -1935,7 +1917,7 @@ task.spawn(function()
 	end
 end)
 
--- Build tabs instantly (no task.delay) so grid renders correctly
+-- Build tabs instantly
 local tHome = window:AddTab("Home", "home")
 local gHome = tHome:AddGrid()
 local sAbout = gHome:Section("About")
