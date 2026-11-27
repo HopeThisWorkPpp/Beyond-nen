@@ -661,7 +661,7 @@ local function createSection(host, title, registry, opts)
 			AutoButtonColor = false,
 			BackgroundColor3 = on and accent or Theme.off,
 			BorderSizePixel = 0,
-			        AnchorPoint = Vector2.new(1, 0.5),
+			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, 0, 0.5, 0),
 			Size = UDim2.fromOffset(42, 24),
 			Text = "",
@@ -2028,7 +2028,6 @@ function Library.CreateWindow(opts)
 				AutomaticSize = Enum.AutomaticSize.Y,
 				LayoutOrder = #self._sections + 1,
 			}, scroll)
-			-- Using fixed height cells to prevent Roblox UIListLayout/UIGrid collapse bug
 			local gridLayout = mk("UIGridLayout", {
 				CellSize = UDim2.new(0.5, -6, 0, 180),
 				CellPadding = UDim2.new(0, 12, 0, 0),
