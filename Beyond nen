@@ -74,36 +74,59 @@ end
 -- ── BULLETPROOF UI LOADER ────────────────────────────────────────────────
 local lib
 local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua"
-local ok, res = pcall(function() return game:HttpGet(url) end)
 
-if ok and type(res) == "string" and #res > 1000 then
-	local fn, err = loadstring(res)
-	if type(fn) == "function" then
-		local ok2, l = pcall(fn)
-		if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
-			lib = l
-		else
-			warn("[Zentynal Hub] Lib runtime fail: " .. tostring(l))
-		end
-	else
-		warn("[Zentynal Hub] Lib compile fail: " .. tostring(err))
-	end
-else
-	warn("[Zentynal Hub] GitHub fetch failed.")
+local ok, res = pcall(function()
+    return game:HttpGet(url)
+end)
+
+print("[DEBUG] fetch:", ok, type(res), ok and #res or res)
+
+if not ok then
+    error("[DEBUG] HTTP FAILED: " .. tostring(res))
 end
 
-if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib. Ensure the GitHub URL is correct and the file is pushed.")
+local fn, err = loadstring(res)
+
+print("[DEBUG] compile:", type(fn), err)
+
+if not fn then
+    error("[DEBUG] COMPILE FAILED: " .. tostring(err))
 end
--- ─────────────────────────────────────────────────────────────────────────
 
-local window = lib.CreateWindow({
-	Title = "Zentynal",
-	Subtitle = "Beyond Nen",
-	ToggleKey = Enum.KeyCode.RightShift
-})
+local ok2, result = pcall(fn)
 
-window:SetProfile(lp.Name, "Free", lp.UserId)
+print("[DEBUG] library:", ok2, type(result))
+
+if not ok2 then
+    error("[DEBUG] LIBRARY FAILED: " .. tostring(result))
+end
+
+lib = result
+
+print("[DEBUG] CreateWindow:", type(lib.CreateWindow))
+
+local ok3, result3 = pcall(function()
+    local w = lib.CreateWindow({
+        Title = "Zentynal",
+        Subtitle = "Beyond Nen",
+        ToggleKey = Enum.KeyCode.RightShift
+    })
+
+    print("[DEBUG] window:", type(w))
+    print("[DEBUG] SetProfile:", type(w.SetProfile))
+
+    w:SetProfile(game:GetService("Players").LocalPlayer.Name, "Free", game:GetService("Players").LocalPlayer.UserId)
+
+    return w
+end)
+
+if not ok3 then
+    error("[DEBUG] WINDOW FAILED: " .. tostring(result3))
+end
+
+local window = result3
+
+print("[DEBUG] UI INITIALIZED")
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
 
