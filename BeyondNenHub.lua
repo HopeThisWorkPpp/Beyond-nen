@@ -1,5 +1,6 @@
 -- filename: BeyondNenHub.lua
 -- Beyond Nen Hub — Zentynal UI
+
 do
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
