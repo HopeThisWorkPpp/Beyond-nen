@@ -1,20 +1,21 @@
--- Zentynal Hub v3 (Beyond Nen) 
+-- ZentynalLib.lua
+-- Zentynal UI Library V6 (Full)
+-- Drop-in replacement for YourNenHub's lib load.
+-- Components: Toggle, Button, Slider, TextBox, Keybind, ColorPicker,
+-- Dropdown, Label, Paragraph, Icon headers, Tab search, Toasts,
+-- Window drag, Mobile scaling, Popup layer.
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
-local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 local LIB_NAME = "Zentynal"
 local LOGO_ASSET = "rbxassetid://114884658309823"
 local LOGO_FILE = "Zentynal/logo.png"
-local CONFIG_DIR = "Zentynal/configs"
-local PROMO_FILE = "Zentynal/promo_seen.txt"
-local PROMO_LINK = "https://discord.gg/qrRjkjeBn5"
-local PROMO_COOLDOWN = 5
 
 local function isCompact()
 	local cam = workspace.CurrentCamera
@@ -41,51 +42,12 @@ local function pointer01(gui, input)
 		math.clamp((p.Y - abs.Y) / math.max(1, size.Y), 0, 1)
 end
 
-local function safeReadFile(path)
-	if typeof(readfile) ~= "function" then return nil end
-	local ok, data = pcall(readfile, path)
-	if ok then return data end
-	return nil
-end
-
-local function safeWriteFile(path, data)
-	if typeof(writefile) ~= "function" then return false end
-	return pcall(writefile, path, data)
-end
-
-local function safeMkDir(path)
-	if typeof(makefolder) ~= "function" then return end
-	pcall(makefolder, path)
-end
-
-local function safeIsFile(path)
-	if typeof(isfile) ~= "function" then return false end
-	local ok, res = pcall(isfile, path)
-	return ok and res == true
-end
-
-local function safeListFiles(path)
-	if typeof(listfiles) ~= "function" then return {} end
-	local ok, res = pcall(listfiles, path)
-	if ok and type(res) == "table" then return res end
-	return {}
-end
-
-local function safeDelFile(path)
-	if typeof(delfile) ~= "function" then return end
-	pcall(delfile, path)
-end
-
 local Theme = {
 	bg = Color3.fromRGB(10, 14, 12),
-	bgHi = Color3.fromRGB(16, 22, 20),
 	panel = Color3.fromRGB(16, 24, 20),
-	panelHi = Color3.fromRGB(20, 30, 26),
 	panelAlt = Color3.fromRGB(24, 36, 30),
 	sidebar = Color3.fromRGB(8, 12, 10),
-	sidebarHi = Color3.fromRGB(14, 20, 17),
 	stroke = Color3.fromRGB(40, 60, 50),
-	strokeHi = Color3.fromRGB(60, 90, 74),
 	accent = Color3.fromRGB(52, 211, 153),
 	accentDim = Color3.fromRGB(16, 185, 129),
 	mint = Color3.fromRGB(52, 211, 153),
@@ -96,7 +58,6 @@ local Theme = {
 	off = Color3.fromRGB(34, 48, 40),
 	tabIdle = Color3.fromRGB(8, 12, 10),
 	tabHover = Color3.fromRGB(28, 44, 36),
-	selected = Color3.fromRGB(48, 36, 74),
 }
 
 local function parentGui(gui)
@@ -186,23 +147,6 @@ local function pressPunch(gui)
 	tween(s, { Scale = 1 }, 0.22, Enum.EasingStyle.Back)
 end
 
-local function makeShadow(parent, size, offsetStep)
-	for i = 1, 3 do
-		local off = offsetStep * i
-		local sh = mk("Frame", {
-			Name = "Shadow" .. i,
-			BackgroundColor3 = Color3.new(0, 0, 0),
-			BackgroundTransparency = 0.72 + i * 0.07,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, off, 0.5, off),
-			Size = size,
-			ZIndex = 10 - i,
-		}, parent)
-		corner(sh, 14)
-	end
-end
-
 local brandImage = nil
 local function getBrandImage()
 	if brandImage ~= nil then return brandImage end
@@ -232,31 +176,13 @@ local function makeBrand(parent, size, z)
 		ZIndex = z,
 	}, parent)
 	corner(wrap, math.floor(size * 0.5))
-	local grad = mk("UIGradient", {
-		Color = ColorSequence.new(Theme.accentDim, Theme.panelAlt),
-		Rotation = 45,
-	}, wrap)
-	grad.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.5),
-		NumberSequenceKeypoint.new(1, 0.95),
-	})
-	mk("TextLabel", {
-		Name = "BrandGlyph",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		Font = Enum.Font.GothamBlack,
-		Text = "Z",
-		TextColor3 = Theme.accent,
-		TextSize = math.floor(size * 0.55),
-		ZIndex = z + 1,
-	}, wrap)
 	local img = mk("ImageLabel", {
 		Name = "LogoImage",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Image = getBrandImage(),
 		ScaleType = Enum.ScaleType.Fit,
-		ZIndex = z + 2,
+		ZIndex = z + 1,
 	}, wrap)
 	corner(img, math.floor(size * 0.5))
 	return wrap
@@ -308,49 +234,12 @@ local Library = { Theme = Theme, Windows = {}, Maid = Maid }
 local activeDropdownClose = nil
 local activeColorClose = nil
 local popupLayer = nil
-local promoShownThisSession = false
 
 function Library.SetTheme(patch)
 	for k, v in pairs(patch or {}) do Theme[k] = v end
 end
 
-local function xmlEscape(s)
-	if type(s) ~= "string" then s = tostring(s) end
-	return s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
-end
-
-local function rgbHex(c)
-	if typeof(c) ~= "Color3" then return "FFFFFF" end
-	return string.format("%02X%02X%02X",
-		math.floor(c.R * 255 + 0.5),
-		math.floor(c.G * 255 + 0.5),
-		math.floor(c.B * 255 + 0.5))
-end
-
-local function highlightText(text, query, hlColor)
-	text = tostring(text or "")
-	query = tostring(query or "")
-	if query == "" then return text end
-	local lowerText = string.lower(text)
-	local lowerQuery = string.lower(query)
-	if #lowerQuery == 0 then return text end
-	local out = {}
-	local cursor = 1
-	while true do
-		local s, e = string.find(lowerText, lowerQuery, cursor, true)
-		if not s then
-			out[#out + 1] = xmlEscape(string.sub(text, cursor))
-			break
-		end
-		out[#out + 1] = xmlEscape(string.sub(text, cursor, s - 1))
-		out[#out + 1] = '<font color="#' .. rgbHex(hlColor or Theme.accent) .. '"><b>'
-			.. xmlEscape(string.sub(text, s, e)) .. "</b></font>"
-		cursor = e + 1
-		if cursor > #text then break end
-	end
-	return table.concat(out)
-end
-
+-- ── Icon painting ───────────────────────────────────────────────────────
 local ICON_KIND = {
 	ESP = "grid", Aim = "crosshair", Silent = "circle", Trigger = "bolt",
 	Rage = "flame", Mods = "sliders", Lobby = "home", Queue = "list",
@@ -360,7 +249,6 @@ local ICON_KIND = {
 	Precision = "sliders", Humanization = "dots", Box = "grid", Info = "list",
 	Combat = "crosshair", Farm = "circle", Movement = "bolt", Player = "home",
 	Main = "home", Stats = "list", Weapon = "sliders",
-	Gathering = "funnel", Loot = "drop", Exam = "shield", Home = "home",
 }
 
 local function mark(parent, props)
@@ -488,68 +376,29 @@ local function hsvToRgb(h, s, v)
 	return Color3.new(v, p, q)
 end
 
-local function colorToArray(c)
-	return { math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5) }
-end
-
-local function arrayToColor(t)
-	if type(t) ~= "table" then return nil end
-	local r = tonumber(t[1] or t.R or t.r) or 0
-	local g = tonumber(t[2] or t.G or t.g) or 0
-	local b = tonumber(t[3] or t.B or t.b) or 0
-	return Color3.fromRGB(math.clamp(r, 0, 255), math.clamp(g, 0, 255), math.clamp(b, 0, 255))
-end
-
-local function keyToName(key)
-	if typeof(key) == "EnumItem" then return key.Name end
-	if type(key) == "string" then return key end
-	return nil
-end
-
-local function nameToKey(name)
-	if type(name) ~= "string" then return nil end
-	local ok, key = pcall(function() return Enum.KeyCode[name] end)
-	if ok then return key end
-	return nil
-end
-
 -- ── Section (card) ──────────────────────────────────────────────────────
-local function createSection(host, title, registry, opts)
-	opts = opts or {}
+local function createSection(host, title)
 	local card = mk("Frame", {
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
-		Size = opts.Size or UDim2.new(1, 0, 0, 0),
+		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 	}, host)
 	corner(card, 16)
-	mk("UIGradient", {
-		Color = ColorSequence.new(Theme.panel, Theme.panelHi),
-		Rotation = 45,
-	}, card)
 	local cardStroke = stroke(card, Theme.stroke, 1, 0.55)
 	pad(card, 16, 16, 16, 16)
-	card.MouseEnter:Connect(function()
-		tween(cardStroke, { Color = Theme.accent, Transparency = 0.28 }, 0.18)
-	end)
-	card.MouseLeave:Connect(function()
-		tween(cardStroke, { Color = Theme.stroke, Transparency = 0.55 }, 0.22)
-	end)
+	card.MouseEnter:Connect(function() tween(cardStroke, { Color = Theme.accent, Transparency = 0.28 }, 0.18) end)
+	card.MouseLeave:Connect(function() tween(cardStroke, { Color = Theme.stroke, Transparency = 0.55 }, 0.22) end)
 	mk("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, card)
 
 	local head = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), LayoutOrder = 0 }, card)
 	local iconBox = mk("Frame", {
-		BackgroundColor3 = Color3.fromRGB(30, 44, 38),
+		BackgroundColor3 = Color3.fromRGB(36, 28, 54),
 		BorderSizePixel = 0,
 		Size = UDim2.fromOffset(26, 26),
 		Position = UDim2.fromOffset(0, 1),
 	}, head)
 	corner(iconBox, 7)
-	stroke(iconBox, Theme.accentDim, 1, 0.55)
-	mk("UIGradient", {
-		Color = ColorSequence.new(Color3.fromRGB(40, 60, 50), Color3.fromRGB(20, 30, 26)),
-		Rotation = 45,
-	}, iconBox)
 	paintIcon(iconBox, title, Theme.accent)
 	mk("TextLabel", {
 		BackgroundTransparency = 1,
@@ -566,11 +415,7 @@ local function createSection(host, title, registry, opts)
 	local api = { Instance = card, _items = {}, _title = string.lower(tostring(title or "")) }
 	local function nextOrder() order += 1 return order end
 	local function trackSearch(text, root)
-		table.insert(api._items, {
-			text = tostring(text or ""),
-			lower = string.lower(tostring(text or "")),
-			root = root,
-		})
+		table.insert(api._items, { text = string.lower(tostring(text or "")), root = root })
 	end
 
 	function api:SetSearch(query)
@@ -578,21 +423,9 @@ local function createSection(host, title, registry, opts)
 		local titleHit = q == "" or string.find(self._title, q, 1, true) ~= nil
 		local any = titleHit
 		for _, item in ipairs(self._items) do
-			local hit = q == "" or titleHit or string.find(item.lower, q, 1, true) ~= nil
-			if hit then
-				item.root.Visible = true
-				if item.textLabel then
-					item.textLabel.RichText = true
-					if q == "" or titleHit then
-						item.textLabel.Text = item.text
-					else
-						item.textLabel.Text = highlightText(item.text, query, Theme.accent)
-					end
-				end
-				any = true
-			else
-				item.root.Visible = false
-			end
+			local show = q == "" or titleHit or string.find(item.text, q, 1, true) ~= nil
+			item.root.Visible = show
+			if show then any = true end
 		end
 		self.Instance.Visible = any
 		return any
@@ -619,17 +452,17 @@ local function createSection(host, title, registry, opts)
 
 	function api:Toggle(opts)
 		opts = opts or {}
-		local labelText = tostring(opts.Text or "Toggle")
 		local desc = tostring(opts.Description or "")
 		local rowH = desc ~= "" and 40 or 30
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, rowH), LayoutOrder = nextOrder() }, card)
+		trackSearch(tostring(opts.Text or "") .. " " .. desc, row)
 
-		local titleLabel = mk("TextLabel", {
+		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -56, 0, 16),
 			Position = UDim2.fromOffset(0, desc ~= "" and 2 or 7),
 			Font = Enum.Font.GothamMedium,
-			Text = labelText,
+			Text = tostring(opts.Text or "Toggle"),
 			TextColor3 = Theme.text,
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -647,9 +480,6 @@ local function createSection(host, title, registry, opts)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, row)
 		end
-		trackSearch(labelText .. " " .. desc, row)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = titleLabel end
 
 		local on = opts.Default == true
 		local accent = opts.Accent or Theme.accent
@@ -673,7 +503,7 @@ local function createSection(host, title, registry, opts)
 		}, track)
 		corner(knob, 9)
 
-		local ctrl = { Flag = opts.Flag, _kind = "toggle", Get = function() return on end }
+		local ctrl = { Flag = opts.Flag, Get = function() return on end }
 		function ctrl:Set(v, silent)
 			on = v and true or false
 			tween(track, { BackgroundColor3 = on and accent or Theme.off }, 0.16)
@@ -682,62 +512,48 @@ local function createSection(host, title, registry, opts)
 		end
 		hoverScale(track, 1.04)
 		track.MouseButton1Click:Connect(function() pressPunch(track) ctrl:Set(not on, false) end)
-		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	function api:Button(opts)
 		opts = opts or {}
-		local labelText = tostring(opts.Text or "Button")
 		local btn = mk("TextButton", {
 			AutoButtonColor = false,
 			BackgroundColor3 = Theme.panelAlt,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 32),
 			Font = Enum.Font.GothamBold,
-			Text = labelText,
+			Text = tostring(opts.Text or "Button"),
 			TextColor3 = opts.Danger and Theme.rose or Theme.accent,
 			TextSize = 12,
 			LayoutOrder = nextOrder(),
 		}, card)
 		corner(btn, 9)
-		local btnGrad = mk("UIGradient", {
-			Color = ColorSequence.new(Theme.panelAlt, Theme.panel),
-			Rotation = 45,
-		}, btn)
 		stroke(btn, opts.Danger and Theme.rose or Theme.accentDim, 1, 0.45)
-		trackSearch(labelText, btn)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = btn end
+		trackSearch(opts.Text, btn)
 		hoverScale(btn, 1.02)
 		btn.MouseButton1Click:Connect(function()
 			pressPunch(btn)
 			if opts.Callback then opts.Callback(btn) end
 		end)
-		btn.MouseEnter:Connect(function()
-			tween(btn, { BackgroundColor3 = Theme.tabHover }, 0.14)
-			tween(btnGrad, { Rotation = 135 }, 0.3)
-		end)
-		btn.MouseLeave:Connect(function()
-			tween(btn, { BackgroundColor3 = Theme.panelAlt }, 0.2)
-			tween(btnGrad, { Rotation = 45 }, 0.3)
-		end)
+		btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = Theme.tabHover }, 0.14) end)
+		btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = Theme.panelAlt }, 0.2) end)
 		return btn
 	end
 
 	function api:Slider(opts)
 		opts = opts or {}
-		local labelText = tostring(opts.Text or "Slider")
 		local minV, maxV = tonumber(opts.Min) or 0, tonumber(opts.Max) or 1
 		local value = math.clamp(tonumber(opts.Default) or minV, minV, maxV)
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 54 or 40), LayoutOrder = nextOrder() }, card)
+		trackSearch((opts.Text or "") .. " " .. desc, row)
 
-		local titleLabel = mk("TextLabel", {
+		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -48, 0, 16),
 			Font = Enum.Font.GothamMedium,
-			Text = labelText,
+			Text = tostring(opts.Text or "Slider"),
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -766,9 +582,6 @@ local function createSection(host, title, registry, opts)
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Right,
 		}, row)
-		trackSearch(labelText .. " " .. desc, row)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = titleLabel end
 
 		local bar = mk("Frame", {
 			BackgroundColor3 = Theme.off,
@@ -783,9 +596,6 @@ local function createSection(host, title, registry, opts)
 			Size = UDim2.new((value - minV) / math.max(0.001, maxV - minV), 0, 1, 0),
 		}, bar)
 		corner(fill, 3)
-		mk("UIGradient", {
-			Color = ColorSequence.new(Theme.accentDim, Theme.cyan),
-		}, fill)
 		local knob = mk("Frame", {
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			BorderSizePixel = 0,
@@ -795,7 +605,7 @@ local function createSection(host, title, registry, opts)
 		}, bar)
 		corner(knob, 6)
 
-		local ctrl = { Flag = opts.Flag, _kind = "slider" }
+		local ctrl = {}
 		local function apply(alpha, silent)
 			alpha = math.clamp(alpha, 0, 1)
 			value = minV + (maxV - minV) * alpha
@@ -827,19 +637,18 @@ local function createSection(host, title, registry, opts)
 				end)
 			end
 		end)
-		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	function api:TextBox(opts)
 		opts = opts or {}
-		local labelText = tostring(opts.Text or "Value")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 52), LayoutOrder = nextOrder() }, card)
-		local titleLabel = mk("TextLabel", {
+		trackSearch(opts.Text or opts.Placeholder, row)
+		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 0, 16),
 			Font = Enum.Font.GothamMedium,
-			Text = labelText,
+			Text = tostring(opts.Text or "Value"),
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -861,15 +670,9 @@ local function createSection(host, title, registry, opts)
 		corner(box, 8)
 		pad(box, 0, 0, 10, 10)
 		local boxStroke = stroke(box, Theme.stroke, 1, 0.35)
-		trackSearch(labelText .. " " .. tostring(opts.Placeholder or ""), row)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = titleLabel end
-		local ctrl = { Flag = opts.Flag, _kind = "textbox" }
+		local ctrl = {}
 		function ctrl:Get() return box.Text end
-		function ctrl:Set(text, silent)
-			box.Text = tostring(text or "")
-			if not silent and opts.Callback then opts.Callback(box.Text, false) end
-		end
+		function ctrl:Set(text) box.Text = tostring(text or "") end
 		box.Focused:Connect(function()
 			tween(boxStroke, { Color = Theme.accent, Transparency = 0.05 }, 0.16)
 			tween(box, { BackgroundColor3 = Theme.tabIdle }, 0.16)
@@ -879,25 +682,24 @@ local function createSection(host, title, registry, opts)
 			tween(box, { BackgroundColor3 = Theme.panelAlt }, 0.2)
 			if opts.Callback then opts.Callback(box.Text, enter) end
 		end)
-		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	function api:Keybind(opts)
 		opts = opts or {}
-		local labelText = tostring(opts.Text or "Keybind")
 		local current = opts.Default
 		if typeof(current) == "string" then current = Enum.KeyCode[current] or Enum.KeyCode.K end
 		if typeof(current) ~= "EnumItem" then current = Enum.KeyCode.K end
 		local listening = false
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 46 or 32), LayoutOrder = nextOrder() }, card)
-		local titleLabel = mk("TextLabel", {
+		trackSearch((opts.Text or "") .. " " .. desc, row)
+		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, -92, 0, 16),
 			Position = UDim2.fromOffset(0, desc ~= "" and 4 or 8),
 			Font = Enum.Font.GothamMedium,
-			Text = labelText,
+			Text = tostring(opts.Text or "Keybind"),
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -915,10 +717,6 @@ local function createSection(host, title, registry, opts)
 				TextTruncate = Enum.TextTruncate.AtEnd,
 			}, row)
 		end
-		trackSearch(labelText .. " " .. desc, row)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = titleLabel end
-
 		local btn = mk("TextButton", {
 			AutoButtonColor = false,
 			BackgroundColor3 = Theme.panelAlt,
@@ -934,7 +732,7 @@ local function createSection(host, title, registry, opts)
 		corner(btn, 6)
 		stroke(btn, Theme.stroke, 1, 0.3)
 		hoverScale(btn, 1.06)
-		local ctrl = { Flag = opts.Flag, _kind = "keybind" }
+		local ctrl = {}
 		local function paint()
 			btn.Text = listening and "..." or current.Name
 			tween(btn, {
@@ -961,30 +759,29 @@ local function createSection(host, title, registry, opts)
 			ctrl:Set(input.KeyCode, false)
 		end)
 		paint()
-		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	function api:ColorPicker(opts)
 		opts = opts or {}
 		local ignoreColorOutsideUntil = 0
-		local labelText = tostring(opts.Text or "Color")
 		local current = opts.Default or Theme.accent
 		local original = current
 		local h, s, v = rgbToHsv(current)
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 42 or 28), LayoutOrder = nextOrder() }, card)
+		trackSearch((opts.Text or "Color") .. " " .. desc .. " color picker rgb hue", row)
 
 		local openBtn = mk("TextButton", { AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Text = "" }, row)
 		local preview = mk("Frame", { BackgroundColor3 = current, BorderSizePixel = 0, Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(0, 5), ZIndex = 2 }, openBtn)
 		corner(preview, 5)
 		stroke(preview, Color3.fromRGB(255, 255, 255), 1, 0.55)
-		local titleLabel = mk("TextLabel", {
+		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(26, desc ~= "" and 2 or 0),
 			Size = UDim2.new(1, -26, 0, 16),
 			Font = Enum.Font.GothamMedium,
-			Text = labelText,
+			Text = tostring(opts.Text or "Color"),
 			TextColor3 = Theme.text,
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -1004,11 +801,8 @@ local function createSection(host, title, registry, opts)
 				ZIndex = 2,
 			}, openBtn)
 		end
-		trackSearch(labelText .. " " .. desc .. " color picker rgb hue", row)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = titleLabel end
 
-		local pop, svFill, svCursor, hueCursor, curSwatch, rBox, gBox, bBox
+		local pop, svFill, hueFill, svCursor, hueCursor, curSwatch, rBox, gBox, bBox
 
 		local function hueColor() return hsvToRgb(h, 1, 1) end
 		local function apply(silent)
@@ -1038,8 +832,7 @@ local function createSection(host, title, registry, opts)
 			if not host then return end
 			pop = mk("Frame", { Name = "ColorPop", BackgroundColor3 = Theme.panel, BorderSizePixel = 0, Size = UDim2.fromOffset(278, 214), ZIndex = 120 }, host)
 			corner(pop, 12)
-			stroke(pop, Theme.accentDim, 1, 0.35)
-			mk("UIGradient", { Color = ColorSequence.new(Theme.panel, Theme.panelHi), Rotation = 45 }, pop)
+			stroke(pop, Theme.stroke, 1, 0.25)
 			local sv = mk("TextButton", { AutoButtonColor = false, BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(168, 168), Text = "", ZIndex = 121 }, pop)
 			corner(sv, 8)
 			svFill = mk("UIGradient", { Color = ColorSequence.new(Color3.new(1, 1, 1), hueColor()) }, sv)
@@ -1047,13 +840,17 @@ local function createSection(host, title, registry, opts)
 			corner(shade, 8)
 			mk("UIGradient", {
 				Color = ColorSequence.new(Color3.new(0, 0, 0), Color3.new(0, 0, 0)),
-				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) }),
+				Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 1),
+					NumberSequenceKeypoint.new(1, 0),
+				}),
 				Rotation = 90,
 			}, shade)
 			svCursor = mk("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), Active = false, ZIndex = 123 }, shade)
 			pcall(function() svCursor.Interactable = false end)
 			corner(svCursor, 6)
 			stroke(svCursor, Color3.new(1, 1, 1), 2, 0)
+
 			local hue = mk("TextButton", { AutoButtonColor = false, BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Position = UDim2.fromOffset(188, 12), Size = UDim2.fromOffset(16, 168), Text = "", ZIndex = 121 }, pop)
 			corner(hue, 6)
 			mk("UIGradient", {
@@ -1072,6 +869,7 @@ local function createSection(host, title, registry, opts)
 			pcall(function() hueCursor.Interactable = false end)
 			corner(hueCursor, 4)
 			stroke(hueCursor, Color3.new(1, 1, 1), 1.5, 0)
+
 			local side = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(214, 12), Size = UDim2.fromOffset(52, 168), ZIndex = 121 }, pop)
 			mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 12), Font = Enum.Font.Gotham, Text = "Current", TextColor3 = Theme.textDim, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left }, side)
 			curSwatch = mk("Frame", { BackgroundColor3 = current, BorderSizePixel = 0, Position = UDim2.fromOffset(0, 14), Size = UDim2.fromOffset(44, 36) }, side)
@@ -1083,6 +881,7 @@ local function createSection(host, title, registry, opts)
 				h, s, v = rgbToHsv(original)
 				apply(false)
 			end)
+
 			local function chan(x, label)
 				local box = mk("TextBox", { BackgroundColor3 = Theme.panelAlt, BorderSizePixel = 0, Position = UDim2.fromOffset(x, 180), Size = UDim2.fromOffset(40, 22), Font = Enum.Font.Gotham, Text = "0", TextColor3 = Theme.text, TextSize = 11, ClearTextOnFocus = false, ZIndex = 122 }, pop)
 				corner(box, 5)
@@ -1102,6 +901,7 @@ local function createSection(host, title, registry, opts)
 			rBox.FocusLost:Connect(fromBoxes)
 			gBox.FocusLost:Connect(fromBoxes)
 			bBox.FocusLost:Connect(fromBoxes)
+
 			local function readSv(input)
 				local x, y = pointer01(sv, input)
 				s = x
@@ -1127,6 +927,7 @@ local function createSection(host, title, registry, opts)
 			bindDrag(sv, "sv")
 			bindDrag(shade, "sv")
 			bindDrag(hue, "hue")
+
 			apply(true)
 			pop.Position = UDim2.fromOffset(
 				math.clamp(preview.AbsolutePosition.X + 28, 12, 900),
@@ -1147,40 +948,31 @@ local function createSection(host, title, registry, opts)
 			local function hit(gui)
 				if not gui or not gui.Parent then return false end
 				local pos, size = gui.AbsolutePosition, gui.AbsoluteSize
-				return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
+				return p.X >= pos.X and p.X <= pos.X + size.X
+					and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
 			end
 			if not hit(pop) and not hit(openBtn) then closePop() end
 		end)
-		local ctrl = { Flag = opts.Flag, _kind = "colorpicker" }
 		function ctrl:Set(color, silent)
-			if typeof(color) == "Color3" then
-				h, s, v = rgbToHsv(color)
-				apply(silent == true)
-			elseif type(color) == "table" then
-				local c = arrayToColor(color)
-				if c then
-					h, s, v = rgbToHsv(c)
-					apply(silent == true)
-				end
-			end
+			if typeof(color) ~= "Color3" then return end
+			h, s, v = rgbToHsv(color)
+			apply(silent == true)
 		end
 		function ctrl:Get() return current end
 		apply(true)
-		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	function api:Dropdown(opts)
 		opts = opts or {}
-		local labelText = tostring(opts.Text or "Select")
 		local options = {}
 		local rawOpts = opts.Options or opts.Values or opts.List or {}
 		if type(rawOpts) == "table" then
 			if #rawOpts > 0 then
-				for _, vv in ipairs(rawOpts) do table.insert(options, tostring(vv)) end
+				for _, v in ipairs(rawOpts) do table.insert(options, tostring(v)) end
 			else
-				for k, vv in pairs(rawOpts) do
-					local s = type(vv) == "string" and vv ~= "" and vv or (type(k) == "string" and k or "")
+				for k, v in pairs(rawOpts) do
+					local s = type(v) == "string" and v ~= "" and v or (type(k) == "string" and k or "")
 					if s ~= "" then table.insert(options, s) end
 				end
 				table.sort(options)
@@ -1192,14 +984,12 @@ local function createSection(host, title, registry, opts)
 
 		local desc = tostring(opts.Description or "")
 		local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, desc ~= "" and 66 or 52), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder(), ZIndex = 8 }, card)
+		trackSearch(tostring(opts.Text or "") .. " " .. desc .. " " .. table.concat(options, " "), row)
 
-		local titleLabel = mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamMedium, Text = labelText, TextColor3 = Theme.text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left }, row)
+		mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamMedium, Text = tostring(opts.Text or "Select"), TextColor3 = Theme.text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left }, row)
 		if desc ~= "" then
 			mk("TextLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 14), Font = Enum.Font.Gotham, Text = string.gsub(desc, " +", "   "), TextColor3 = Theme.textDim, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
 		end
-		trackSearch(labelText .. " " .. desc .. " " .. table.concat(options, " "), row)
-		local tracked = api._items[#api._items]
-		if tracked then tracked.textLabel = titleLabel end
 
 		local trigger = mk("TextButton", { AutoButtonColor = false, BackgroundColor3 = Theme.panelAlt, BorderSizePixel = 0, Position = UDim2.fromOffset(0, desc ~= "" and 32 or 20), Size = UDim2.new(1, 0, 0, 30), Text = "", ZIndex = 9 }, row)
 		corner(trigger, 6)
@@ -1210,24 +1000,27 @@ local function createSection(host, title, registry, opts)
 		local open = false
 		local itemH = 22
 		local host = popupLayer
+		if not host then
+			host = mk("Frame", { Name = "DropdownHost", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 350 }, row:FindFirstAncestorOfClass("ScreenGui") or row)
+			popupLayer = popupLayer or host
+		end
 		local catcher = mk("TextButton", { Name = "DropdownCatch", AutoButtonColor = false, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Text = "", Visible = false, ZIndex = 398 }, host)
 		local menu = mk("Frame", { Name = "DropdownMenu", BackgroundColor3 = Theme.panelAlt, BorderSizePixel = 0, Size = UDim2.fromOffset(200, 0), Visible = false, Active = true, ZIndex = 400, ClipsDescendants = true }, host)
 		corner(menu, 6)
 		stroke(menu, Theme.stroke, 1, 0.3)
-		mk("UIGradient", { Color = ColorSequence.new(Theme.panelAlt, Theme.panel), Rotation = 90 }, menu)
 		local list = mk("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.new(1, 0, 1, 0), ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.accentDim, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, Active = false, ZIndex = 401 }, menu)
 		pad(list, 3, 3, 3, 3)
 		mk("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 
-		local ctrl = { Flag = opts.Flag, _kind = "dropdown" }
+		local ctrl = {}
 		local itemButtons = {}
 
-		local function setValue(vv, silent)
-			value = tostring(vv)
+		local function setValue(v, silent)
+			value = tostring(v)
 			valueLabel.Text = value
 			for _, item in ipairs(itemButtons) do
 				local selected = item.Name == value
-				item.BackgroundColor3 = selected and Theme.selected or Theme.panelAlt
+				item.BackgroundColor3 = selected and Color3.fromRGB(48, 36, 74) or Theme.panelAlt
 				item.TextColor3 = selected and Theme.text or Theme.textDim
 				local tick = item:FindFirstChildWhichIsA("TextLabel")
 				if tick then tick.Text = selected and "✓" or "" end
@@ -1288,20 +1081,20 @@ local function createSection(host, title, registry, opts)
 		end
 
 		function ctrl:Get() return value end
-		function ctrl:Set(vv, silent)
-			if table.find(options, tostring(vv)) then setValue(vv, silent) end
+		function ctrl:Set(v, silent)
+			if table.find(options, tostring(v)) then setValue(v, silent) end
 		end
 		function ctrl:SetOptions(listOpts, keep)
 			local incoming = {}
 			if type(listOpts) == "table" then
 				if #listOpts > 0 then
-					for _, vv in ipairs(listOpts) do
-						local s = tostring(vv)
+					for _, v in ipairs(listOpts) do
+						local s = tostring(v)
 						if s ~= "" then table.insert(incoming, s) end
 					end
 				else
-					for k, vv in pairs(listOpts) do
-						local s = type(vv) == "string" and vv ~= "" and vv or (type(k) == "string" and k or "")
+					for k, v in pairs(listOpts) do
+						local s = type(v) == "string" and v ~= "" and v or (type(k) == "string" and k or "")
 						if s ~= "" then table.insert(incoming, s) end
 					end
 					table.sort(incoming)
@@ -1324,7 +1117,7 @@ local function createSection(host, title, registry, opts)
 				end)
 				item.MouseLeave:Connect(function()
 					local selected = item.Name == value
-					item.BackgroundColor3 = selected and Theme.selected or Theme.panelAlt
+					item.BackgroundColor3 = selected and Color3.fromRGB(48, 36, 74) or Theme.panelAlt
 					item.TextColor3 = selected and Theme.text or Theme.textDim
 					tick.Text = selected and "✓" or ""
 				end)
@@ -1358,197 +1151,10 @@ local function createSection(host, title, registry, opts)
 			if menu then menu:Destroy() end
 			if catcher then catcher:Destroy() end
 		end)
-		if opts.Flag and registry then registry[opts.Flag] = ctrl end
 		return ctrl
 	end
 
 	return api
-end
-
--- ============================================================
--- PART 2: REST OF LIBRARY + HUB FEATURES
--- ============================================================
-
--- ── Promo popup ─────────────────────────────────────────────────────────
-local function showPromo(screen)
-	if promoShownThisSession then return end
-	if safeIsFile(PROMO_FILE) then return end
-	promoShownThisSession = true
-
-	local overlay = mk("Frame", {
-		Name = "PromoOverlay",
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 9000,
-		Active = true,
-	}, screen)
-	corner(overlay, 0)
-
-	local card = mk("Frame", {
-		Name = "PromoCard",
-		BackgroundColor3 = Theme.panel,
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.fromOffset(380, 240),
-		ZIndex = 9001,
-	}, overlay)
-	corner(card, 14)
-	mk("UIGradient", { Color = ColorSequence.new(Theme.panel, Theme.panelHi), Rotation = 45 }, card)
-	stroke(card, Theme.accentDim, 1, 0.3)
-
-	local topBar = mk("Frame", {
-		BackgroundColor3 = Theme.accent,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 2),
-		ZIndex = 9002,
-	}, card)
-	mk("UIGradient", {
-		Color = ColorSequence.new(Theme.accentDim, Theme.cyan),
-	}, topBar)
-
-	local brand = makeBrand(card, 44, 9002)
-	brand.AnchorPoint = Vector2.new(0.5, 0)
-	brand.Position = UDim2.new(0.5, 0, 0, 22)
-
-	mk("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 82),
-		Size = UDim2.new(1, 0, 0, 22),
-		Font = Enum.Font.GothamBold,
-		Text = "Join the community",
-		TextColor3 = Theme.text,
-		TextSize = 17,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 9002,
-	}, card)
-
-	mk("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(20, 108),
-		Size = UDim2.new(1, -40, 0, 44),
-		Font = Enum.Font.Gotham,
-		Text = "We drop updates, sneak peeks, and support here first. Hop in so you don't miss anything.",
-		TextColor3 = Theme.textDim,
-		TextSize = 12,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 9002,
-	}, card)
-
-	local copyBtn = mk("TextButton", {
-		AutoButtonColor = false,
-		BackgroundColor3 = Theme.accentDim,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(20, 164),
-		Size = UDim2.new(0.5, -26, 0, 36),
-		Font = Enum.Font.GothamBold,
-		Text = "Copy invite link",
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextSize = 12,
-		ZIndex = 9002,
-	}, card)
-	corner(copyBtn, 8)
-	stroke(copyBtn, Theme.accent, 1, 0.1)
-	hoverScale(copyBtn, 1.02)
-
-	local closeBtn = mk("TextButton", {
-		AutoButtonColor = false,
-		BackgroundColor3 = Theme.panelAlt,
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 6, 0, 164),
-		Size = UDim2.new(0.5, -26, 0, 36),
-		Font = Enum.Font.GothamBold,
-		Text = "Close (5)",
-		TextColor3 = Theme.textDim,
-		TextSize = 12,
-		ZIndex = 9002,
-	}, card)
-	corner(closeBtn, 8)
-	stroke(closeBtn, Theme.stroke, 1, 0.4)
-
-	local copied = false
-	local function setCopied()
-		copied = true
-		copyBtn.Text = "Copied!"
-		copyBtn.BackgroundColor3 = Theme.accent
-		task.delay(1.6, function()
-			if copyBtn and copyBtn.Parent then
-				copyBtn.Text = "Copy invite link"
-				copyBtn.BackgroundColor3 = Theme.accentDim
-			end
-		end)
-	end
-
-	local function doCopy()
-		pcall(function()
-			if typeof(setclipboard) == "function" then
-				setclipboard(PROMO_LINK)
-				return
-			end
-			if typeof(toclipboard) == "function" then
-				toclipboard(PROMO_LINK)
-				return
-			end
-			if typeof(writeclipboard) == "function" then
-				writeclipboard(PROMO_LINK)
-				return
-			end
-		end)
-		setCopied()
-	end
-
-	copyBtn.MouseButton1Click:Connect(function()
-		pressPunch(copyBtn)
-		doCopy()
-	end)
-
-	local canClose = false
-	local remaining = PROMO_COOLDOWN
-	local function tick()
-		remaining -= 1
-		if remaining > 0 then
-			closeBtn.Text = string.format("Close (%d)", remaining)
-		else
-			canClose = true
-			closeBtn.Text = "Close"
-			closeBtn.TextColor3 = Theme.text
-			tween(closeBtn, { BackgroundColor3 = Theme.panelAlt }, 0.16)
-			stroke(closeBtn, Theme.strokeHi, 1, 0.2)
-		end
-	end
-	task.spawn(function()
-		task.wait(1)
-		while remaining > 0 do
-			tick()
-			task.wait(1)
-		end
-	end)
-
-	local function dismiss()
-		if not canClose then return end
-		safeMkDir("Zentynal")
-		safeWriteFile(PROMO_FILE, tostring(os.time()))
-		tween(overlay, { BackgroundTransparency = 1 }, 0.2)
-		tween(card, { BackgroundTransparency = 1 }, 0.2)
-		task.wait(0.24)
-		if overlay and overlay.Parent then overlay:Destroy() end
-	end
-
-	closeBtn.MouseButton1Click:Connect(function()
-		if not canClose then return end
-		pressPunch(closeBtn)
-		dismiss()
-	end)
-
-	overlay.BackgroundTransparency = 1
-	tween(overlay, { BackgroundTransparency = 0.5 }, 0.24)
-	card.Size = UDim2.fromOffset(340, 210)
-	tween(card, { Size = UDim2.fromOffset(380, 240) }, 0.3, Enum.EasingStyle.Back)
-
-	return overlay
 end
 
 -- ── Window ───────────────────────────────────────────────────────────────
@@ -1594,10 +1200,8 @@ function Library.CreateWindow(opts)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		DisplayOrder = opts.DisplayOrder or 120000,
 		IgnoreGuiInset = true,
-		Enabled = true,
+		Enabled = false,
 	}, screenParent)
-
-	makeShadow(screen, size, 8)
 
 	local root = mk("Frame", {
 		Name = "Root",
@@ -1612,8 +1216,7 @@ function Library.CreateWindow(opts)
 		ZIndex = 10,
 	}, screen)
 	corner(root, 12)
-	mk("UIGradient", { Color = ColorSequence.new(Theme.bg, Theme.bgHi), Rotation = 45 }, root)
-	stroke(root, Theme.strokeHi, 1, 0.55)
+	stroke(root, Theme.stroke, 1, 0.2)
 
 	local topLine = mk("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -1623,13 +1226,7 @@ function Library.CreateWindow(opts)
 		BorderSizePixel = 0,
 		ZIndex = 11,
 	}, root)
-	mk("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Theme.accentDim),
-			ColorSequenceKeypoint.new(0.5, Theme.accent),
-			ColorSequenceKeypoint.new(1, Theme.cyan),
-		}),
-	}, topLine)
+	mk("UIGradient", { Color = ColorSequence.new(Theme.accent, Theme.cyan) }, topLine)
 
 	local openScale = mk("UIScale", { Name = "OpenScale", Scale = 1 }, root)
 	local body = mk("Frame", { Name = "BodyRow", BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 20 }, root)
@@ -1642,7 +1239,6 @@ function Library.CreateWindow(opts)
 		Size = UDim2.new(0, SIDE_W, 1, 0),
 		ClipsDescendants = true,
 	}, body)
-	mk("UIGradient", { Color = ColorSequence.new(Theme.sidebar, Theme.sidebarHi), Rotation = 90 }, sidebar)
 
 	mk("Frame", {
 		BackgroundColor3 = Theme.stroke,
@@ -1705,71 +1301,9 @@ function Library.CreateWindow(opts)
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 	}, sidebarNav)
 
-	-- Profile row
-	local profileRow = mk("Frame", {
-		Name = "ProfileRow",
-		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, 64),
-		ZIndex = 5,
-	}, sidebar)
-	local profileName = mk("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(50, 12),
-		Size = UDim2.new(1, -58, 0, 18),
-		Font = Enum.Font.GothamBold,
-		Text = LocalPlayer.Name or "Player",
-		TextColor3 = Theme.text,
-		TextSize = 13,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ZIndex = 6,
-	}, profileRow)
-	local profileRole = mk("TextLabel", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(50, 30),
-		Size = UDim2.new(1, -58, 0, 16),
-		Font = Enum.Font.Gotham,
-		Text = "Free",
-		TextColor3 = Theme.textDim,
-		TextSize = 11,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ZIndex = 6,
-	}, profileRow)
-	local profileAvatar = mk("Frame", {
-		Name = "Avatar",
-		BackgroundColor3 = Theme.panelAlt,
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 16, 0.5, 0),
-		Size = UDim2.fromOffset(34, 34),
-		ZIndex = 6,
-	}, profileRow)
-	corner(profileAvatar, 17)
-	stroke(profileAvatar, Theme.accent, 1, 0.4)
-	local profileImg = mk("ImageLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		Image = "",
-		ScaleType = Enum.ScaleType.Fit,
-		ZIndex = 7,
-	}, profileAvatar)
-	corner(profileImg, 17)
-	task.spawn(function()
-		local ok, img = pcall(function()
-			return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-		end)
-		if ok and img and profileImg then
-			profileImg.Image = img
-		end
-	end)
-
 	local content = mk("Frame", {
 		Name = "Content",
 		BackgroundColor3 = Theme.bg,
-		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, SIDE_W, 0, 0),
 		Size = UDim2.new(1, -SIDE_W, 1, 0),
@@ -1860,70 +1394,33 @@ function Library.CreateWindow(opts)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, toastHold)
 
-	local reopen = mk("TextButton", {
-		Name = "Reopen",
-		AutoButtonColor = false,
-		BackgroundColor3 = Theme.panel,
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -16, 0, 72),
-		Size = UDim2.fromOffset(50, 50),
-		Text = "",
-		Visible = false,
-		ZIndex = 60,
-	}, screen)
-	corner(reopen, 25)
-	stroke(reopen, Theme.accent, 1, 0.35)
-	mk("UIGradient", { Color = ColorSequence.new(Theme.panel, Theme.panelHi), Rotation = 45 }, reopen)
-	local pillBrand = makeBrand(reopen, 32, 61)
-	pillBrand.AnchorPoint = Vector2.new(0.5, 0.5)
-	pillBrand.Position = UDim2.new(0.5, 0, 0.5, 0)
-	hoverScale(reopen, 1.08)
-
 	local window = {
 		Screen = screen,
 		Root = root,
-		Reopen = reopen,
 		Theme = Theme,
 		_tabs = {},
 		_tabOrder = {},
 		_active = nil,
 		_open = false,
 		_search = "",
-		_flags = {},
 	}
 
 	closeBtn.MouseButton1Click:Connect(function() window:SetOpen(false) end)
 	closeBtn.MouseEnter:Connect(function() tween(closeBtn, { TextColor3 = Theme.rose }, 0.14) end)
 	closeBtn.MouseLeave:Connect(function() tween(closeBtn, { TextColor3 = Theme.textDim }, 0.16) end)
-	reopen.MouseButton1Click:Connect(function() pressPunch(reopen) window:Toggle() end)
-
-	function window:SetProfile(name, role, avatarId)
-		if name then profileName.Text = tostring(name) end
-		if role then profileRole.Text = tostring(role) end
-		if avatarId then
-			task.spawn(function()
-				local ok, img = pcall(function()
-					return Players:GetUserThumbnailAsync(avatarId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-				end)
-				if ok and img and profileImg then profileImg.Image = img end
-			end)
-		end
-	end
 
 	function window:SetOpen(visible)
 		visible = visible and true or false
 		if self._open == visible then return end
 		self._open = visible
-		screen.Enabled = true
 		if visible then
+			screen.Enabled = true
 			root.Visible = true
-			reopen.Visible = false
 			openScale.Scale = 0.88
 			tween(openScale, { Scale = 1 }, 0.34, Enum.EasingStyle.Back)
 		else
+			screen.Enabled = false
 			root.Visible = false
-			reopen.Visible = true
 			if activeDropdownClose then pcall(activeDropdownClose, false) end
 			if activeColorClose then pcall(activeColorClose) end
 		end
@@ -1954,22 +1451,9 @@ function Library.CreateWindow(opts)
 		}, sidebarNav)
 		corner(btn, 10)
 
-		local accentBar = mk("Frame", {
-			Name = "AccentBar",
-			BackgroundColor3 = Theme.accent,
-			BorderSizePixel = 0,
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 0, 0.5, 0),
-			Size = UDim2.new(0, 3, 0, 20),
-			Visible = false,
-			ZIndex = 4,
-		}, btn)
-		corner(accentBar, 2)
-		mk("UIGradient", { Color = ColorSequence.new(Theme.accentDim, Theme.cyan), Rotation = 90 }, accentBar)
-
 		local iconBox = mk("Frame", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(14, 7),
+			Position = UDim2.fromOffset(12, 7),
 			Size = UDim2.fromOffset(26, 26),
 			ZIndex = 3,
 		}, btn)
@@ -1977,8 +1461,8 @@ function Library.CreateWindow(opts)
 
 		local label = mk("TextLabel", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(48, 0),
-			Size = UDim2.new(1, -52, 1, 0),
+			Position = UDim2.fromOffset(46, 0),
+			Size = UDim2.new(1, -50, 1, 0),
 			Font = Enum.Font.GothamMedium,
 			Text = name,
 			TextColor3 = Theme.textDim,
@@ -1987,17 +1471,8 @@ function Library.CreateWindow(opts)
 			ZIndex = 2,
 		}, btn)
 
-		local page = mk("Frame", {
+		local page = mk("ScrollingFrame", {
 			Name = "Page_" .. name,
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-			Size = UDim2.fromScale(1, 1),
-			Visible = false,
-			ClipsDescendants = true,
-		}, pagesFolder)
-
-		local scroll = mk("ScrollingFrame", {
-			Name = "Scroll",
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Size = UDim2.fromScale(1, 1),
@@ -2005,46 +1480,20 @@ function Library.CreateWindow(opts)
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			ScrollBarThickness = 3,
 			ScrollBarImageColor3 = Theme.accentDim,
-		}, page)
-		pad(scroll, 4, 16, 4, 4)
+			Visible = false,
+		}, pagesFolder)
+		pad(page, 4, 16, 4, 4)
 		mk("UIListLayout", {
 			Padding = UDim.new(0, 12),
 			SortOrder = Enum.SortOrder.LayoutOrder,
-		}, scroll)
+		}, page)
 
-		local tabApi = { Name = name, Button = btn, Page = page, Scroll = scroll, _sections = {}, _iconBox = iconBox, _accent = accentBar, _label = label }
+		local tabApi = { Name = name, Button = btn, Page = page, _sections = {} }
 
-		function tabApi:Section(sectionTitle)
-			local sec = createSection(scroll, sectionTitle, window._flags)
+		function tabApi:Section(title)
+			local sec = createSection(page, title)
 			table.insert(self._sections, sec)
 			return sec
-		end
-
-		function tabApi:AddGrid()
-			local gridFrame = mk("Frame", {
-				Name = "Grid",
-				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 0),
-				AutomaticSize = Enum.AutomaticSize.Y,
-				LayoutOrder = #self._sections + 1,
-			}, scroll)
-			local gridLayout = mk("UIGridLayout", {
-				CellSize = UDim2.new(0.5, -6, 0, 180),
-				CellPadding = UDim2.new(0, 12, 0, 0),
-				SortOrder = Enum.SortOrder.LayoutOrder,
-				FillDirectionMaxCells = 2,
-			}, gridFrame)
-			local tab = self
-			local api2 = {}
-			function api2:Section(t)
-				local sec = createSection(gridFrame, t, window._flags)
-				sec.Instance.Size = UDim2.new(1, 0, 1, 0)
-				sec.Instance.AutomaticSize = Enum.AutomaticSize.None
-				sec.Instance.LayoutOrder = #tab._sections + 1
-				table.insert(tab._sections, sec)
-				return sec
-			end
-			return api2
 		end
 
 		function tabApi._applySearch(q)
@@ -2056,45 +1505,6 @@ function Library.CreateWindow(opts)
 			return any
 		end
 
-		local function fadePage(show)
-			if show then
-				page.Visible = true
-				scroll.Position = UDim2.fromOffset(0, 6)
-				scroll.BackgroundTransparency = 1
-				for _, c in ipairs(scroll:GetDescendants()) do
-					if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
-						c.TextTransparency = 1
-					elseif c:IsA("Frame") then
-						if c.BackgroundTransparency < 1 then c.BackgroundTransparency = 1 end
-					elseif c:IsA("ImageLabel") or c:IsA("ImageButton") then
-						c.ImageTransparency = 1
-					end
-				end
-				tween(scroll, { Position = UDim2.fromOffset(0, 0) }, 0.16, Enum.EasingStyle.Quart)
-				for _, c in ipairs(scroll:GetDescendants()) do
-					if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
-						tween(c, { TextTransparency = 0 }, 0.15)
-					elseif c:IsA("Frame") then
-						if c.BackgroundTransparency < 1 then tween(c, { BackgroundTransparency = 0 }, 0.15) end
-					elseif c:IsA("ImageLabel") or c:IsA("ImageButton") then
-						tween(c, { ImageTransparency = 0 }, 0.15)
-					end
-				end
-			else
-				scroll.Position = UDim2.fromOffset(0, 0)
-				tween(scroll, { Position = UDim2.fromOffset(0, -6) }, 0.12, Enum.EasingStyle.Quart)
-				for _, c in ipairs(scroll:GetDescendants()) do
-					if c:IsA("TextLabel") or c:IsA("TextButton") or c:IsA("TextBox") then
-						tween(c, { TextTransparency = 1 }, 0.1)
-					elseif c:IsA("Frame") then
-						if c.BackgroundTransparency < 1 then tween(c, { BackgroundTransparency = 1 }, 0.1) end
-					elseif c:IsA("ImageLabel") or c:IsA("ImageButton") then
-						tween(c, { ImageTransparency = 1 }, 0.1)
-					end
-				end
-			end
-		end
-
 		local function select()
 			for n, t in pairs(self._tabs) do
 				local isSel = n == name
@@ -2102,18 +1512,19 @@ function Library.CreateWindow(opts)
 					BackgroundColor3 = isSel and Theme.panelAlt or Theme.tabIdle,
 					BackgroundTransparency = isSel and 0 or 1,
 				}, 0.16)
-				if t._label then
-					tween(t._label, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16)
-				end
-				if t._accent then
-					t._accent.Visible = isSel
-					if isSel then
-						t._accent.Size = UDim2.new(0, 3, 0, 10)
-						tween(t._accent, { Size = UDim2.new(0, 3, 0, 20) }, 0.2)
+				local lbl = t.Button:FindFirstChildWhichIsA("TextLabel")
+				if lbl then tween(lbl, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16) end
+				local ib = t.Button:FindFirstChild("IconMark", true)
+				if not ib then
+					for _, c in ipairs(t.Button:GetChildren()) do
+						if c:IsA("Frame") and c:GetChildren()[1] and c:GetChildren()[1].Name == "IconMark" then
+							ib = c
+							break
+						end
 					end
 				end
-				if t._iconBox then
-					for _, m in ipairs(t._iconBox:GetChildren()) do
+				if ib then
+					for _, m in ipairs(ib:GetChildren()) do
 						if m.Name == "IconMark" then
 							m.BackgroundColor3 = isSel and Theme.accent or Theme.textDim
 							local st = m:FindFirstChildOfClass("UIStroke")
@@ -2121,33 +1532,19 @@ function Library.CreateWindow(opts)
 						end
 					end
 				end
-				if not isSel and t.Page.Visible then
-					fadePage(false)
-					task.delay(0.12, function()
-						if self._active ~= n then t.Page.Visible = false end
-					end)
-				end
+				t.Page.Visible = isSel
 			end
 			self._active = name
 			pageTitle.Text = name
-			if not page.Visible then
-				fadePage(true)
-			else
-				scroll.Position = UDim2.fromOffset(0, 0)
-			end
 			if self._search ~= "" then tabApi._applySearch(self._search) end
 		end
 
 		btn.MouseButton1Click:Connect(function() pressPunch(btn) select() end)
 		btn.MouseEnter:Connect(function()
-			if self._active ~= name then
-				tween(btn, { BackgroundTransparency = 0.55, BackgroundColor3 = Theme.tabHover }, 0.14)
-			end
+			if self._active ~= name then tween(btn, { BackgroundTransparency = 0.6, BackgroundColor3 = Theme.tabHover }, 0.14) end
 		end)
 		btn.MouseLeave:Connect(function()
-			if self._active ~= name then
-				tween(btn, { BackgroundTransparency = 1 }, 0.16)
-			end
+			if self._active ~= name then tween(btn, { BackgroundTransparency = 1 }, 0.16) end
 		end)
 
 		self._tabs[name] = tabApi
@@ -2158,45 +1555,40 @@ function Library.CreateWindow(opts)
 
 	function window:SelectTab(name)
 		local t = self._tabs[name]
-		if not t then return end
+		if t and t.Button then
+			for _, c in ipairs(t.Button:GetChildren()) do
+				if c:IsA("TextButton") and c ~= t.Button then end
+			end
+		end
+		local btn = t and t.Button
+		if btn then
+			local sig = btn.MouseButton1Click
+			if sig then
+				-- simulate click via firing
+				local fire = false
+				pcall(function()
+					fire = true
+					btn:SetAttribute("ForceSelect", true)
+					btn:SetAttribute("ForceSelect", nil)
+				end)
+			end
+		end
 		for n, tt in pairs(self._tabs) do
 			local isSel = n == name
 			tween(tt.Button, {
 				BackgroundColor3 = isSel and Theme.panelAlt or Theme.tabIdle,
 				BackgroundTransparency = isSel and 0 or 1,
 			}, 0.16)
-			if tt._label then tween(tt._label, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16) end
-			if tt._accent then
-				tt._accent.Visible = isSel
-				if isSel then
-					tt._accent.Size = UDim2.new(0, 3, 0, 10)
-					tween(tt._accent, { Size = UDim2.new(0, 3, 0, 20) }, 0.2)
-				end
-			end
-			if tt._iconBox then
-				for _, m in ipairs(tt._iconBox:GetChildren()) do
-					if m.Name == "IconMark" then
-						m.BackgroundColor3 = isSel and Theme.accent or Theme.textDim
-						local st = m:FindFirstChildOfClass("UIStroke")
-						if st then st.Color = isSel and Theme.accent or Theme.textDim end
-					end
-				end
-			end
-			if not isSel and tt.Page.Visible then
-				tween(tt.Scroll, { Position = UDim2.fromOffset(0, -6) }, 0.12)
-				task.delay(0.12, function()
-					if self._active ~= n then tt.Page.Visible = false end
-				end)
-			end
+			local lbl = tt.Button:FindFirstChildWhichIsA("TextLabel")
+			if lbl then tween(lbl, { TextColor3 = isSel and Theme.text or Theme.textDim }, 0.16) end
+			tt.Page.Visible = isSel
 		end
 		self._active = name
 		pageTitle.Text = name
-		if not t.Page.Visible then
-			t.Page.Visible = true
-			t.Scroll.Position = UDim2.fromOffset(0, 6)
-			tween(t.Scroll, { Position = UDim2.fromOffset(0, 0) }, 0.16, Enum.EasingStyle.Quart)
+		if self._search ~= "" then
+			local ta = self._tabs[name]
+			if ta and ta._applySearch then ta._applySearch(self._search) end
 		end
-		if self._search ~= "" and t._applySearch then t._applySearch(self._search) end
 	end
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -2218,131 +1610,33 @@ function Library.CreateWindow(opts)
 			ZIndex = 81,
 		}, toastHold)
 		corner(toast, 8)
-		local bar = mk("Frame", {
-			Name = "Bar",
-			BackgroundColor3 = color,
-			BorderSizePixel = 0,
-			Size = UDim2.new(0, 3, 1, 0),
-			ZIndex = 82,
-		}, toast)
-		corner(bar, 2)
-		local toastStroke = stroke(toast, color, 1, 0.4)
-		local lbl = mk("TextLabel", {
+		local tStroke = stroke(toast, color, 1, 0.35)
+		tStroke.Transparency = 1
+		pad(toast, 10, 10, 12, 12)
+		mk("TextLabel", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(14, 10),
-			Size = UDim2.new(1, -22, 0, 0),
+			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Font = Enum.Font.Gotham,
-			Text = tostring(text),
+			Text = text,
 			TextColor3 = Theme.text,
-			TextSize = 11,
+			TextSize = 12,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTransparency = 1,
 			ZIndex = 82,
 		}, toast)
-		toastStroke.Transparency = 1
-		lbl.TextTransparency = 1
-
-		tween(toast, { BackgroundTransparency = 0 }, 0.2)
-		tween(toastStroke, { Transparency = 0.4 }, 0.2)
-		tween(lbl, { TextTransparency = 0 }, 0.2)
-
-		task.delay(math.max(0.5, tonumber(dur) or 3), function()
+		TweenService:Create(toast, TweenInfo.new(0.18), { BackgroundTransparency = 0.05 }):Play()
+		TweenService:Create(tStroke, TweenInfo.new(0.18), { Transparency = 0.35 }):Play()
+		task.delay(dur, function()
 			if not toast.Parent then return end
-			tween(toast, { BackgroundTransparency = 1 }, 0.25)
-			tween(lbl, { TextTransparency = 1 }, 0.25)
-			tween(toastStroke, { Transparency = 1 }, 0.25)
-			tween(bar, { BackgroundTransparency = 1 }, 0.25)
-			task.wait(0.3)
+			TweenService:Create(toast, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(tStroke, TweenInfo.new(0.22), { Transparency = 1 }):Play()
+			task.wait(0.24)
 			if toast.Parent then toast:Destroy() end
 		end)
-		return toast
 	end
 
-	-- ── Config ──────────────────────────────────────────────────────────
-	function window:SaveConfig(name)
-		name = tostring(name or "default")
-		if name == "" or name:find("[/\\%.%.]") then return false end
-		safeMkDir("Zentynal")
-		safeMkDir(CONFIG_DIR)
-		local data = {}
-		for flag, ctrl in pairs(self._flags) do
-			local ok, value = pcall(function() return ctrl:Get() end)
-			if ok then
-				if ctrl._kind == "colorpicker" and typeof(value) == "Color3" then
-					data[flag] = { type = "color3", value = colorToArray(value) }
-				elseif ctrl._kind == "keybind" then
-					data[flag] = { type = "keycode", value = keyToName(value) }
-				elseif ctrl._kind == "slider" or ctrl._kind == "toggle" then
-					data[flag] = { type = "number_bool", value = value }
-				else
-					data[flag] = { type = "raw", value = value }
-				end
-			end
-		end
-		local ok, encoded = pcall(function() return HttpService:JSONEncode({ flags = data, saved = os.time() }) end)
-		if not ok then return false end
-		local wok = safeWriteFile(CONFIG_DIR .. "/" .. name .. ".json", encoded)
-		if wok then
-			self:Notify({ Text = "Config saved: " .. name, Color = Theme.accent, Duration = 2 })
-		else
-			self:Notify({ Text = "Save failed (no writefile)", Color = Theme.rose, Duration = 3 })
-		end
-		return wok
-	end
-
-	function window:LoadConfig(name)
-		name = tostring(name or "default")
-		if name == "" or name:find("[/\\%.%.]") then return false end
-		local raw = safeReadFile(CONFIG_DIR .. "/" .. name .. ".json")
-		if not raw then
-			self:Notify({ Text = "Config not found: " .. name, Color = Theme.rose, Duration = 2 })
-			return false
-		end
-		local ok, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
-		if not ok or type(decoded) ~= "table" or type(decoded.flags) ~= "table" then
-			self:Notify({ Text = "Config corrupt: " .. name, Color = Theme.rose, Duration = 2 })
-			return false
-		end
-		local applied = 0
-		for flag, entry in pairs(decoded.flags) do
-			local ctrl = self._flags[flag]
-			if ctrl and type(entry) == "table" and entry.value ~= nil then
-				local v = entry.value
-				if entry.type == "color3" then v = arrayToColor(v)
-				elseif entry.type == "keycode" then v = nameToKey(v) end
-				if v ~= nil then
-					pcall(function() ctrl:Set(v, true) end)
-					applied += 1
-				end
-			end
-		end
-		self:Notify({ Text = string.format("Loaded %d flag(s) from %s", applied, name), Color = Theme.accent, Duration = 2 })
-		return true
-	end
-
-	function window:ListConfigs()
-		if typeof(listfiles) ~= "function" then return {} end
-		local out = {}
-		for _, path in ipairs(safeListFiles(CONFIG_DIR)) do
-			local base = path:match("([^/\\]+)%.json$")
-			if base then table.insert(out, base) end
-		end
-		table.sort(out)
-		return out
-	end
-
-	function window:DeleteConfig(name)
-		name = tostring(name or "")
-		if name == "" then return false end
-		if safeIsFile(CONFIG_DIR .. "/" .. name .. ".json") then
-			safeDelFile(CONFIG_DIR .. "/" .. name .. ".json")
-			return true
-		end
-		return false
-	end
-
-	-- drag
 	do
 		local dragging, dragStart, startPos = false, nil, nil
 		sideBrand.InputBegan:Connect(function(input)
@@ -2374,46 +1668,26 @@ function Library.CreateWindow(opts)
 		end)
 	end
 
-	-- toggle keys
 	do
-		local casName = "ZentynalToggle_" .. tostring(math.random(100000, 999999))
-		local function onToggle()
-			if UserInputService:GetFocusedTextBox() then return end
-			window:Toggle()
+		local function isFocused()
+			local box = UserInputService:GetFocusedTextBox()
+			return box ~= nil
 		end
-		local okCAS = pcall(function()
-			ContextActionService:BindActionAtPriority(
-				casName,
-				function(_, state)
-					if state == Enum.UserInputState.Begin then
-						onToggle()
-						return Enum.ContextActionResult.Sink
-					end
-					return Enum.ContextActionResult.Pass
-				end,
-				false,
-				Enum.ContextActionPriority.High.Value,
-				table.unpack(toggleKeys)
-			)
-		end)
-		local toggleConn = UserInputService.InputBegan:Connect(function(input)
+		UserInputService.InputBegan:Connect(function(input)
 			if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+			if isFocused() then return end
 			for _, k in ipairs(toggleKeys) do
-				if input.KeyCode == k then onToggle() return end
+				if input.KeyCode == k then
+					window:Toggle()
+					return
+				end
 			end
 		end)
-		window._casName = casName
-		window._okCAS = okCAS
-		window._toggleConn = toggleConn
 	end
 
 	function window:Destroy()
 		if activeDropdownClose then pcall(activeDropdownClose, false) end
 		if activeColorClose then pcall(activeColorClose) end
-		if self._okCAS and self._casName then
-			pcall(function() ContextActionService:UnbindAction(self._casName) end)
-		end
-		if self._toggleConn then pcall(function() self._toggleConn:Disconnect() end) end
 		popupLayer = nil
 		if screen then pcall(function() screen:Destroy() end) end
 		for i, w in ipairs(Library.Windows) do
@@ -2426,14 +1700,6 @@ function Library.CreateWindow(opts)
 
 	table.insert(Library.Windows, window)
 	window:SetOpen(true)
-
-	task.spawn(function()
-		task.wait(0.35)
-		if screen and screen.Parent then
-			pcall(showPromo, screen)
-		end
-	end)
-
 	return window
 end
 
@@ -2443,1549 +1709,4 @@ function Library.DestroyAll()
 	end
 end
 
--- ============================================================
--- INITIALIZE HUB WITH BUNDLED LIBRARY
--- ============================================================
-local lib = Library
-
-if not lib then
-    error("[ZentynalHub] Library failed to initialize.")
-end
-
-local window = lib.CreateWindow({
-	Title = "Zentynal",
-	Subtitle = "Beyond Nen",
-	ToggleKeys = { Enum.KeyCode.RightShift },
-})
-
-local function notify(msg) pcall(function() window:Notify(msg) end) end
-notify("[Zentynal] Hub loaded (Bundled Library)")
-
--- ============================================================
--- ORIGINAL GAME FEATURES (Preserved)
--- ============================================================
-local RS = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local PathfindingService = game:GetService("PathfindingService")
-local VirtualUser = game:GetService("VirtualUser")
-local TeleportService = game:GetService("TeleportService")
-local Lighting = game:GetService("Lighting")
-local HttpService = game:GetService("HttpService")
-local lp = Players.LocalPlayer
-
-local ENV = _G
-if ENV.ZentynalHub and ENV.ZentynalHub.Destroy then pcall(ENV.ZentynalHub.Destroy) end
-
-local function isFn(x) return type(x) == "function" end
-
-local connections, injected = {}, {}
-local function bind(c) connections[#connections+1] = c return c end
-local function track(i) injected[#injected+1] = i return i end
-
-local firePP = fireproximityprompt
-if not isFn(firePP) then
-	firePP = function(p)
-		if p and p:IsA("ProximityPrompt") then
-			p:InputHoldBegin()
-			task.wait((p.HoldDuration or 0) + 0.05)
-			p:InputHoldEnd()
-		end
-	end
-end
-
-local function tryGameRequire(mod)
-	if not mod then return nil end
-	if typeof(getrenv) == "function" then
-		local ok, env = pcall(getrenv)
-		if ok and type(env) == "table" and type(env.require) == "function" then
-			local ok2, res = pcall(env.require, mod)
-			if ok2 and res ~= nil then return res end
-		end
-	end
-	local ok3, res3 = pcall(require, mod)
-	return (ok3 and res3 ~= nil) and res3 or nil
-end
-
-local Knit
-local function knitSvc(name)
-	if not Knit then
-		local pkg = RS.Packages:FindFirstChild("Knit") or RS.Packages:FindFirstChild("knit")
-		if pkg then Knit = tryGameRequire(pkg) end
-	end
-	if not Knit then return nil end
-	local ok, s = pcall(function() return Knit.GetService(name) end)
-	return ok and s or nil
-end
-
-local function svc(name, m)
-	local ok, res = pcall(function()
-		return RS.Packages._Index["sleitnick_knit@1.7.0"].knit.Services[name].RF[m]
-	end)
-	if not ok then
-		local pkg = RS.Packages:FindFirstChild("Knit") or RS.Packages:FindFirstChild("knit")
-		if pkg then
-			local K = tryGameRequire(pkg)
-			if K then
-				local s = K.GetService(name)
-				if s and s[m] then return s[m] end
-			end
-		end
-		return nil
-	end
-	return res
-end
-
-local function rem(name) return RS.Remotes[name] end
-local function callSvc(name, m, ...)
-	local args = {...}
-	local s = knitSvc(name)
-	if s and s[m] then
-		return pcall(function() return s[m](s, table.unpack(args)) end)
-	end
-	local rf = svc(name, m)
-	if rf then
-		return pcall(function() return rf:InvokeServer(table.unpack(args)) end)
-	end
-	return false, "service not found"
-end
-
-local function char() return lp.Character end
-local function hrp()
-	local c = char(); return c and c:FindFirstChild("HumanoidRootPart")
-end
-local function hum()
-	local c = char(); return c and c:FindFirstChildOfClass("Humanoid")
-end
-local function attr(n) return lp:GetAttribute(n) end
-
-local CN = RS:FindFirstChild("CombatNet")
-local cn = { rid = 0, combo = 1, lastDecision = 0 }
-local function nextRid() cn.rid = cn.rid + 1 return cn.rid end
-local bindCNLate
-local function bindDecision(f)
-	bind(f.Decision.OnClientEvent:Connect(function(rid, ok, reason, expected)
-		if not ok then
-			if reason == "ComboMismatch" and type(expected) == "number" then
-				cn.combo = expected
-			else
-				cn.combo = 1
-			end
-			cn.lastDecision = os.clock()
-		else
-			cn.combo = (cn.combo % 5) + 1
-		end
-	end))
-end
-if CN then bindDecision(CN) end
-bind(RS.ChildAdded:Connect(function(c)
-	if c.Name == "CombatNet" and not CN then
-		CN = c
-		bindDecision(c)
-		if bindCNLate then bindCNLate(c) end
-	end
-end))
-
-local function swingAt(mob)
-	if not CN then return false end
-	if not (mob and mob.Parent and (mob:GetAttribute("Health") or 0) > 0) then return false end
-	local c = char(); if not c then return false end
-	if not c:FindFirstChildOfClass("Tool") then
-		local t = lp.Backpack:FindFirstChildOfClass("Tool")
-		local h = c:FindFirstChildOfClass("Humanoid")
-		if t and h then h:EquipTool(t) end
-	end
-	local r = nextRid()
-	CN.Attack:FireServer(r, "M1", cn.combo)
-	task.wait(0.08)
-	if mob.Parent then CN.HitClaim:FireServer(r, mob) end
-	return true
-end
-
-local moveOK = {tier = nil}
-local function moveTo(targetCF, speed)
-	local h = hrp(); if not h then return false end
-	speed = speed or 60
-	local ok = pcall(function() char():PivotTo(targetCF) end)
-	task.wait(0.15)
-	if ok and hrp() and (hrp().Position - targetCF.Position).Magnitude < 8 then
-		moveOK.tier = 1 return true
-	end
-	local h2 = hrp(); if not h2 then return false end
-	local dist = (h2.Position - targetCF.Position).Magnitude
-	local tw = TweenService:Create(h2, TweenInfo.new(math.max(dist/speed, 0.5), Enum.EasingStyle.Linear), {CFrame = targetCF})
-	tw:Play()
-	local done = false
-	bind(tw.Completed:Connect(function() done = true end))
-	local t0 = tick()
-	while not done and tick()-t0 < dist/speed + 3 do task.wait(0.1) end
-	if hrp() and (hrp().Position - targetCF.Position).Magnitude < 10 then
-		moveOK.tier = 2 return true
-	end
-	pcall(function() tw:Cancel() end)
-	local hu = hum(); if not hu then return false end
-	local path = PathfindingService:CreatePath({AgentRadius=2, AgentHeight=5, AgentCanJump=true})
-	local pok = pcall(function() path:ComputeAsync(h2.Position, targetCF.Position) end)
-	if pok and path.Status == Enum.PathStatus.Success then
-		for _, wp in pairs(path:GetWaypoints()) do
-			if wp.Action == Enum.PathWaypointAction.Jump then hu.Jump = true end
-			hu:MoveTo(wp.Position); hu.MoveToFinished:Wait(2)
-		end
-	else
-		hu:MoveTo(targetCF.Position); hu.MoveToFinished:Wait(8)
-	end
-	moveOK.tier = 3
-	return hrp() and (hrp().Position - targetCF.Position).Magnitude < 12
-end
-
-local afkConn
-local function setAntiAFK(on)
-	if on and not afkConn then
-		afkConn = bind(lp.Idled:Connect(function()
-			VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new())
-		end))
-	elseif not on and afkConn then afkConn:Disconnect() afkConn = nil end
-end
-
-local noclipOn, flyOn, infJumpOn, clickTPOn = false, false, false, false
-local flySpeed, wsOn, wsVal = 60, false, 16
-
-local C = {}
-local farmOn, farmTarget, auraOn, dead = false, "Forest Brawler", false, false
-local farmPos, farmDist, farmFloat = "Above", 8, true
-local farmYOff = 0
-local farmMob = nil
-local questBusy = false
-
-bind(RunService.Stepped:Connect(function()
-	local farmNoclip = farmOn and farmFloat
-	if (noclipOn or farmNoclip) and char() then
-		for _, p in pairs(char():GetDescendants()) do
-			if p:IsA("BasePart") then p.CanCollide = false end
-		end
-	end
-end))
-bind(RunService.Heartbeat:Connect(function()
-	if flyOn and char() then
-		local h, hu = hrp(), hum()
-		if not (h and hu) then return end
-		local v = hu.MoveDirection * flySpeed
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then v = v + Vector3.new(0, flySpeed, 0) end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then v = v - Vector3.new(0, flySpeed, 0) end
-		h.AssemblyLinearVelocity = v
-		h.AssemblyAngularVelocity = Vector3.zero
-	end
-end))
-bind(UserInputService.JumpRequest:Connect(function()
-	if infJumpOn and hum() then hum():ChangeState(Enum.HumanoidStateType.Jumping) end
-end))
-local mouse = lp:GetMouse()
-bind(mouse.Button1Down:Connect(function()
-	if clickTPOn and char() and mouse.Hit then
-		char():PivotTo(mouse.Hit + Vector3.new(0, 3, 0))
-	end
-end))
-bind(RunService.Heartbeat:Connect(function()
-	if wsOn and hum() and hum().WalkSpeed ~= wsVal then hum().WalkSpeed = wsVal end
-end))
-
-local function farmCF(mob)
-	local mp = mob:GetPivot()
-	if farmPos == "Behind" then
-		return mp * CFrame.new(0, farmYOff, farmDist)
-	elseif farmPos == "Below" then
-		return mp * CFrame.new(0, -math.max(farmDist, 3) + farmYOff, 0) * CFrame.Angles(math.rad(90), 0, 0)
-	end
-	return mp * CFrame.new(0, math.max(farmDist, 3) + farmYOff, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-end
-local AURA_RANGE = 12
-
-local function landToGround()
-	local h = hrp(); if not h then farmMob = nil return end
-	local rc = workspace:Raycast(h.Position, Vector3.new(0, -600, 0))
-	if rc and rc.Position.Y > h.Position.Y - 400 then
-		char():PivotTo(CFrame.new(rc.Position + Vector3.new(0, 3, 0)))
-	end
-	farmMob = nil
-end
-
-bind(RunService.Heartbeat:Connect(function()
-	if farmFloat and farmOn and farmMob and farmMob.Parent and char() and not questBusy then
-		local h = hrp()
-		if h then
-			local cf = farmCF(farmMob)
-			if cf.Position.Y < workspace.FallenPartsDestroyHeight + 20 then
-				cf = farmMob:GetPivot() * CFrame.new(0, math.max(farmDist, 3), 0) * CFrame.Angles(math.rad(-90), 0, 0)
-			end
-			h.CFrame = cf
-			h.AssemblyLinearVelocity = Vector3.zero
-		end
-	end
-end))
-
-task.spawn(function()
-	while not dead do
-		if auraOn and char() then
-			local p = hrp() and hrp().Position
-			if p then
-				for _, m in pairs(workspace:GetChildren()) do
-					if m:IsA("Model") and (m:GetAttribute("Health") or 0) > 0
-						and m:FindFirstChildOfClass("Humanoid")
-						and not Players:GetPlayerFromCharacter(m)
-						and (m:GetPivot().Position - p).Magnitude <= AURA_RANGE then
-						swingAt(m)
-					end
-				end
-			end
-			task.wait(0.45)
-		else
-			task.wait(0.4)
-		end
-	end
-end)
-
--- ============================================================
--- QUEST HELPERS
--- ============================================================
-local function activeQuests()
-	local d = lp:FindFirstChild("Data")
-	local ss = d and d:FindFirstChild("SavesSlot")
-	local slot = ss and ss:FindFirstChild(tostring(lp:GetAttribute("SelectedSlot") or 1))
-	local pd = slot and slot:FindFirstChild("PlayerData")
-	return pd and pd:FindFirstChild("ActiveQuests")
-end
-
-local function getQuestFolder(qid)
-	local aq = activeQuests()
-	return aq and (aq:FindFirstChild(qid) or aq:FindFirstChild(qid:sub(5)))
-end
-
-local function getQuestStage(qid)
-	local q = getQuestFolder(qid)
-	if not q then return nil, 0, 0 end
-	return q, q:GetAttribute("stage") or 1, q:GetAttribute("stage_progress") or 0
-end
-
-local function isQuestActive(qid)
-	return getQuestFolder(qid) ~= nil
-end
-
-local function findNPC(name)
-	local world = workspace:FindFirstChild("World")
-	local roots = {world, workspace}
-	for _, root in pairs(roots) do
-		if root then
-			for _, m in pairs(root:GetDescendants()) do
-				if m:IsA("Model") and m.Name == name then
-					local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
-					if pp then return m, pp end
-				end
-			end
-		end
-	end
-	if world then
-		local mapLocs = world:FindFirstChild("Map") and world.Map:FindFirstChild("Map Locations")
-		if mapLocs then
-			for _, area in pairs(mapLocs:GetDescendants()) do
-				if area:IsA("Model") and area.Name == name then
-					local pp = area:FindFirstChildWhichIsA("ProximityPrompt", true)
-					if pp then return area, pp end
-				end
-			end
-		end
-	end
-	return nil, nil
-end
-
-local function tpToNPCAndInteract(name)
-	local m, pp = findNPC(name)
-	if m and pp then
-		moveTo(m:GetPivot() + Vector3.new(0, 0, 3))
-		task.wait(0.4)
-		pcall(function() firePP(pp) end)
-		task.wait(0.5)
-		return true
-	end
-	notify("NPC not found: " .. name)
-	return false
-end
-
--- Board Quests
-local KILL_TARGET_MAP = {
-	KillSandTank = "Sand Tank", KillArcticPhantom = "Arctic Phantom", KillFrostyFox = "Frosty Fox",
-	KillFalseHunter = "False Hunter", KillIceSpirit = "Ice Spirit", KillFoxBearHunter = "Foxbear Hunter",
-	["KillFoxBear Hunter"] = "Foxbear Hunter", KillFireSpirits = "Fire Spirit", KillFarmKeeper = "Farm Keeper",
-	KillSwampViper = "Swamp Viper", KillPurpleViper = "Purple Viper", KillStoneSoldier = "Stone Soldier",
-	KillPortMarksman = "Port Marksman", KillChiefFarmer = "Chief Farmer", KillAngryFarmer = "Angry Farmer",
-	KillPhantomGoon = "Phantom Goon", KillFrostFang = "Frost Fang", KillFrozenVanguard = "Frozen Vanguard",
-	KillShiverWarrior = "Shiver Warrior", KillMoleRat = "Mole Rat", KillFireMaster = "Fire Master",
-	KillPortInvader = "Port Invader", KillBlackBlick = "Black Blick", KillFoxBear = "Fox Bear",
-	KillBeachBrawler = "Beach Brawler", KillForestBrawler = "Forest Brawler", KillCaveBrawler = "Cave Brawler",
-}
-
-local function questMobName(qid)
-	if KILL_TARGET_MAP[qid] then return KILL_TARGET_MAP[qid] end
-	if qid:sub(1,4) == "Kill" then
-		local raw = qid:sub(5)
-		return raw:gsub("(%u)", " %1"):gsub("^%s+", "")
-	end
-	return nil
-end
-
-local boardCache = {}
-local function scanBoards()
-	local world = workspace:FindFirstChild("World")
-	local qbs = world and world:FindFirstChild("Quest Boards")
-	if not qbs then return end
-	for _, board in pairs(qbs:GetChildren()) do
-		local interactor = board:FindFirstChild("Interactor")
-		local boardFolder = board:FindFirstChild("Board")
-		local pp = interactor and interactor:FindFirstChildWhichIsA("ProximityPrompt", true)
-		if not (boardFolder and pp) then continue end
-		local quests = {}
-		for _, slot in pairs(boardFolder:GetChildren()) do
-			local qid = slot:GetAttribute("Quest")
-			if type(qid) == "string" and #qid > 0 then
-				table.insert(quests, qid)
-			end
-		end
-		boardCache[board.Name] = { pp = pp, quests = quests, board = board }
-	end
-end
-
-local function findBoardForQuest(qid)
-	if not next(boardCache) then scanBoards() end
-	for _, data in pairs(boardCache) do
-		for _, q in pairs(data.quests) do
-			if q == qid then return data.board, data.pp end
-		end
-	end
-	local world = workspace:FindFirstChild("World")
-	local root = (world and world:FindFirstChild("Quest Boards")) or workspace
-	for _, d in pairs(root:GetDescendants()) do
-		if d:GetAttribute("Quest") == qid then
-			local b = d:FindFirstAncestorOfClass("Model")
-			if b then
-				local interactor = b:FindFirstChild("Interactor", true) or b
-				local p = interactor:FindFirstChildWhichIsA("ProximityPrompt", true)
-				if p then return b, p end
-			end
-		end
-	end
-end
-
-local function acceptQuest(qid)
-	local board, pp = findBoardForQuest(qid)
-	if not (board and pp) then
-		notify("Quest board not found: " .. qid)
-		return false
-	end
-	questBusy = true
-	local c = char()
-	if not c then questBusy = false return false end
-
-	local bp = pp.Parent:IsA("BasePart") and pp.Parent.Position or board:GetPivot().Position
-	for _ = 1, 3 do
-		if c and c.Parent then c:PivotTo(CFrame.new(bp + Vector3.new(0, 0, 4))) end
-		task.wait(0.2)
-	end
-
-	local h = hrp()
-	if not (h and (h.Position - bp).Magnitude <= 18) then
-		questBusy = false
-		return false
-	end
-
-	pcall(function() firePP(pp) end)
-	task.wait(0.5)
-
-	callSvc("QuestsService", "set_board_viewing", true)
-	task.wait(0.3)
-
-	local alreadyDone = lp:GetAttribute(qid) == true
-	local attempts = 0
-	local accepted = false
-
-	local function tryAccept()
-		if alreadyDone then
-			callSvc("QuestsService", "repeat_quest", qid)
-			task.wait(0.6)
-			if activeQuests() and activeQuests():FindFirstChild(qid) then return true end
-			callSvc("QuestsService", "get_quest", qid, "yes")
-			task.wait(0.6)
-		else
-			callSvc("QuestsService", "get_quest", qid, "yes")
-			task.wait(0.6)
-			if activeQuests() and activeQuests():FindFirstChild(qid) then return true end
-			callSvc("QuestsService", "repeat_quest", qid)
-			task.wait(0.6)
-		end
-		local aq = activeQuests()
-		return aq ~= nil and aq:FindFirstChild(qid) ~= nil
-	end
-
-	while not accepted and attempts < 3 do
-		attempts = attempts + 1
-		accepted = tryAccept()
-		if not accepted then task.wait(1) end
-	end
-
-	callSvc("QuestsService", "set_board_viewing", false)
-	questBusy = false
-
-	if accepted then notify("Quest accepted: " .. qid) end
-	return accepted
-end
-
-local questId, autoQuest = "KillForestBrawler", false
-task.spawn(function()
-	local nextTry = 0
-	while not dead do
-		if autoQuest then
-			local aq = activeQuests()
-			local q = aq and aq:FindFirstChild(questId)
-
-			if not q then
-				if tick() >= nextTry then
-					if not acceptQuest(questId) then
-						nextTry = tick() + 15
-					end
-				end
-			else
-				local mob = questMobName(questId)
-				if mob then
-					farmTarget = mob
-					if C.farmTarget then C.farmTarget:Set(mob) end
-					farmOn = true
-					auraOn = true
-					if C.aura then C.aura:Set(true) end
-				end
-				local _, stage, progress = getQuestStage(questId)
-				callSvc("QuestsService", "collect", questId)
-				if not activeQuests():FindFirstChild(questId) then
-					notify("Quest complete! Re-accepting...")
-					farmOn = false
-					nextTry = 0
-				end
-			end
-			task.wait(2.5)
-		else
-			task.wait(0.8)
-		end
-	end
-end)
-
--- ============================================================
--- STORY QUESTS
--- ============================================================
-local storyQuestOn = false
-local storyQuestBusy = false
-
-local function isStoryQuestDone(qid)
-	local d = lp:FindFirstChild("Data")
-	local ss = d and d:FindFirstChild("SavesSlot")
-	local slot = ss and ss:FindFirstChild(tostring(lp:GetAttribute("SelectedSlot") or 1))
-	local pd = slot and slot:FindFirstChild("PlayerData")
-	if pd then
-		local done = pd:FindFirstChild("CompletedQuests") or pd:FindFirstChild("DoneQuests")
-		if done and done:FindFirstChild(qid) then return true end
-		if pd:GetAttribute(qid) == true then return true end
-	end
-	if lp:GetAttribute(qid .. "_done") == true then return true end
-	if lp:GetAttribute(qid) == true and qid ~= "StarterQuest" then return true end
-	return false
-end
-
-local function waitForQuestActive(qid, timeout)
-	timeout = timeout or 10
-	local t0 = tick()
-	while tick() - t0 < timeout do
-		if isQuestActive(qid) then return true end
-		task.wait(0.5)
-	end
-	return false
-end
-
-local function waitForQuestStage(qid, targetStage, timeout)
-	timeout = timeout or 60
-	local t0 = tick()
-	while tick() - t0 < timeout do
-		local _, stage = getQuestStage(qid)
-		if stage >= targetStage then return true end
-		if not isQuestActive(qid) then return false end
-		task.wait(0.5)
-	end
-	return false
-end
-
-local function waitForQuestGone(qid, timeout)
-	timeout = timeout or 30
-	local t0 = tick()
-	while tick() - t0 < timeout do
-		if not isQuestActive(qid) then return true end
-		task.wait(0.5)
-	end
-	return false
-end
-
-local function doStarterQuest()
-	notify("[Story] Starting StarterQuest...")
-	if not isQuestActive("StarterQuest") then
-		callSvc("QuestsService", "get_quest", "StarterQuest", "yes")
-		task.wait(1)
-		if tpToNPCAndInteract("Diana") then
-			callSvc("QuestsService", "get_quest", "StarterQuest", "yes")
-			task.wait(1)
-		end
-	end
-	if not waitForQuestActive("StarterQuest", 8) then
-		notify("[Story] StarterQuest: could not activate")
-		return false
-	end
-	local _, stage = getQuestStage("StarterQuest")
-	if stage == 1 then
-		if tpToNPCAndInteract("Diana") then
-			callSvc("QuestsService", "get_quest", "StarterQuest", "yes")
-			task.wait(1)
-		end
-		waitForQuestStage("StarterQuest", 2, 15)
-		local _, s2 = getQuestStage("StarterQuest")
-		stage = s2 or stage
-	end
-	if stage == 2 then
-		callSvc("QuestsService", "run_method_on_server_handler", "StarterQuest", "begin_rescue")
-		task.wait(2)
-		local t0 = tick()
-		while tick() - t0 < 60 and storyQuestOn do
-			local aprilModel, aprilPP = findNPC("April")
-			if aprilModel then
-				moveTo(aprilModel:GetPivot() + Vector3.new(0, 0, 3))
-				task.wait(0.5)
-				if aprilPP then pcall(function() firePP(aprilPP) end) end
-				task.wait(1)
-				local carryTool = lp.Backpack:FindFirstChild("April") or lp.Backpack:FindFirstChildWhichIsA("Tool")
-				if carryTool and hum() then hum():EquipTool(carryTool) end
-				task.wait(0.5)
-				break
-			end
-			task.wait(1.5)
-		end
-		local exitFound = false
-		local t1 = tick()
-		while tick() - t1 < 30 and storyQuestOn do
-			for _, m in pairs(workspace:GetDescendants()) do
-				if m:IsA("ProximityPrompt") and (m.ObjectText:lower():find("exit") or m.ObjectText:lower():find("escape")) then
-					local pos = m.Parent and m.Parent:IsA("BasePart") and m.Parent.Position
-					if pos then
-						moveTo(CFrame.new(pos))
-						task.wait(0.3)
-						pcall(function() firePP(m) end)
-						task.wait(0.5)
-						exitFound = true
-						break
-					end
-				end
-			end
-			if exitFound then break end
-			task.wait(1.5)
-		end
-		waitForQuestStage("StarterQuest", 3, 30)
-		local _, s3 = getQuestStage("StarterQuest")
-		stage = s3 or stage
-	end
-	if stage == 3 then
-		callSvc("QuestsService", "run_method_on_server_handler", "StarterQuest", "deliver_april")
-		task.wait(1)
-		tpToNPCAndInteract("Diana")
-		task.wait(0.5)
-		callSvc("QuestsService", "collect", "StarterQuest")
-		task.wait(1)
-	end
-	waitForQuestGone("StarterQuest", 15)
-	notify("[Story] StarterQuest done!")
-	return true
-end
-
-local function doStarterWeapon()
-	notify("[Story] Starting StarterWeapon...")
-	if not isQuestActive("StarterWeapon") then
-		if tpToNPCAndInteract("Jager") then
-			callSvc("QuestsService", "get_quest", "StarterWeapon", "yes")
-			task.wait(1)
-		end
-	end
-	if not waitForQuestActive("StarterWeapon", 8) then
-		notify("[Story] StarterWeapon: could not activate")
-		return false
-	end
-	local _, stage = getQuestStage("StarterWeapon")
-	for attempt = 1, 6 do
-		if not isQuestActive("StarterWeapon") then break end
-		local _, st = getQuestStage("StarterWeapon")
-		stage = st
-		if stage == 1 or stage == 2 or stage == 3 then
-			tpToNPCAndInteract("Jager")
-			callSvc("QuestsService", "get_quest", "StarterWeapon", "yes")
-			task.wait(1.5)
-		elseif stage == 4 then
-			local smithFound = false
-			for _, m in pairs(workspace:GetDescendants()) do
-				if m:IsA("Model") then
-					local n = m.Name:lower()
-					if n:find("smith") or n:find("craft") or n:find("anvil") or n:find("forge") then
-						local pp = m:FindFirstChildWhichIsA("ProximityPrompt", true)
-						if pp then
-							moveTo(m:GetPivot() + Vector3.new(0, 0, 3))
-							task.wait(0.5)
-							pcall(function() firePP(pp) end)
-							task.wait(1.5)
-							callSvc("QuestsService", "get_quest", "StarterWeapon", "yes")
-							task.wait(1)
-							smithFound = true
-							break
-						end
-					end
-				end
-			end
-			task.wait(1)
-		elseif stage == 5 then
-			local tool = lp.Backpack:FindFirstChildWhichIsA("Tool")
-			if tool and hum() then
-				hum():EquipTool(tool)
-				task.wait(1.5)
-				callSvc("QuestsService", "get_quest", "StarterWeapon", "yes")
-				task.wait(1)
-			end
-		elseif stage == 6 then
-			tpToNPCAndInteract("Jager")
-			callSvc("QuestsService", "collect", "StarterWeapon")
-			task.wait(1)
-			break
-		end
-		task.wait(0.8)
-	end
-	waitForQuestGone("StarterWeapon", 15)
-	notify("[Story] StarterWeapon done!")
-	return true
-end
-
-local function doActivateNen()
-	notify("[Story] Starting ActivateNen...")
-	local function getNenCave()
-		local world = workspace:FindFirstChild("World")
-		local map = world and world:FindFirstChild("Map")
-		local locs = map and map:FindFirstChild("Map Locations")
-		return locs and locs:FindFirstChild("Nen Cave")
-	end
-	local cave = getNenCave()
-	if not cave then
-		notify("[Story] ActivateNen: Nen Cave not found")
-		return false
-	end
-	moveTo(cave:GetPivot() + Vector3.new(0, 3, 0))
-	task.wait(1)
-	if not isQuestActive("ActivateNen") then
-		local nenFolder = cave:FindFirstChild("ActivateNen")
-		local rohanModel = nenFolder and nenFolder:FindFirstChild("Rohan")
-		if not rohanModel then rohanModel = findNPC("Rohan") end
-		if rohanModel then
-			local pp = rohanModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-			if pp then
-				moveTo(rohanModel:GetPivot() + Vector3.new(0, 0, 3))
-				task.wait(0.4)
-				pcall(function() firePP(pp) end)
-				task.wait(0.5)
-			end
-		end
-		callSvc("QuestsService", "get_quest", "ActivateNen", "yes")
-		task.wait(1.5)
-	end
-	if not waitForQuestActive("ActivateNen", 8) then
-		notify("[Story] ActivateNen: could not activate")
-		return false
-	end
-	local _, stage = getQuestStage("ActivateNen")
-	if stage == 1 then
-		callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 1)
-		task.wait(2)
-		moveTo(cave:GetPivot() + Vector3.new(0, 3, -10))
-		task.wait(2)
-		waitForQuestStage("ActivateNen", 2, 20)
-		local _, s2 = getQuestStage("ActivateNen")
-		stage = s2 or stage
-	end
-	if stage == 2 then
-		local divProp = cave:FindFirstChild("WaterDivinationProp", true) or cave:FindFirstChild("Divination", true)
-		if divProp then
-			moveTo(divProp:GetPivot() + Vector3.new(0, 0, 3))
-			task.wait(0.5)
-			local pp = divProp:FindFirstChildWhichIsA("ProximityPrompt", true)
-			if pp then pcall(function() firePP(pp) end) end
-			task.wait(1)
-		end
-		callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 2)
-		task.wait(1)
-		callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 3)
-		task.wait(1.5)
-		waitForQuestStage("ActivateNen", 4, 20)
-		local _, s4 = getQuestStage("ActivateNen")
-		stage = s4 or stage
-	end
-	if stage == 4 then
-		local meditateSpot = cave:FindFirstChild("MeditationSpot", true) or cave:FindFirstChild("Carpet", true)
-		if meditateSpot then
-			moveTo(meditateSpot:GetPivot() + Vector3.new(0, 0.5, 0))
-			task.wait(0.5)
-		else
-			moveTo(cave:GetPivot() + Vector3.new(0, 3, 0))
-			task.wait(0.5)
-		end
-		callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 4)
-		task.wait(2)
-		for _ = 1, 10 do
-			if not storyQuestOn then break end
-			local _, s5 = getQuestStage("ActivateNen")
-			if s5 and s5 >= 6 then break end
-			callSvc("QuestsService", "run_method_on_server_handler", "ActivateNen", "add_progress", 4)
-			task.wait(2)
-		end
-		waitForQuestStage("ActivateNen", 6, 40)
-		local _, s6 = getQuestStage("ActivateNen")
-		stage = s6 or stage
-	end
-	if stage == 6 then
-		local nenFolder = cave:FindFirstChild("ActivateNen")
-		local rohanModel = nenFolder and nenFolder:FindFirstChild("Rohan")
-		if not rohanModel then rohanModel, _ = findNPC("Rohan") end
-		if rohanModel then
-			local pp = rohanModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-			if pp then
-				moveTo(rohanModel:GetPivot() + Vector3.new(0, 0, 3))
-				task.wait(0.4)
-				pcall(function() firePP(pp) end)
-				task.wait(0.5)
-			end
-		end
-		callSvc("QuestsService", "collect", "ActivateNen")
-		task.wait(1.5)
-	end
-	waitForQuestGone("ActivateNen", 15)
-	notify("[Story] ActivateNen done!")
-	return true
-end
-
-local function doTrainingSession()
-	notify("[Story] Starting TrainingSession...")
-	callSvc("ExplorativeQuestService", "special_quests", "TrainingSession")
-	task.wait(1)
-	callSvc("QuestsService", "get_quest", "TrainingSession", "yes")
-	task.wait(1)
-	if not waitForQuestActive("TrainingSession", 8) then
-		if tpToNPCAndInteract("Trainer") then
-			callSvc("QuestsService", "get_quest", "TrainingSession", "yes")
-			task.wait(1)
-		end
-	end
-	for _ = 1, 10 do
-		if not storyQuestOn then break end
-		pcall(function() callSvc("QuestsService", "collect", "TrainingSession") end)
-		if not isQuestActive("TrainingSession") then break end
-		task.wait(3)
-	end
-	notify("[Story] TrainingSession done!")
-	return true
-end
-
-local function doLostHouseKey()
-	notify("[Story] Starting LostHouseKey...")
-	callSvc("QuestsService", "get_quest", "LostHouseKey", "yes")
-	task.wait(1)
-	if tpToNPCAndInteract("Librarian") then
-		callSvc("QuestsService", "get_quest", "LostHouseKey", "yes")
-		task.wait(1)
-	end
-	if not waitForQuestActive("LostHouseKey", 8) then
-		callSvc("QuestsService", "get_quest", "LostHouseKey", "yes")
-		task.wait(1)
-	end
-	local t0 = tick()
-	while tick() - t0 < 60 and storyQuestOn do
-		for _, m in pairs(workspace:GetDescendants()) do
-			if (m:IsA("Model") or m:IsA("BasePart")) and m.Name:lower():find("key") then
-				local pp = m:IsA("Model") and m:FindFirstChildWhichIsA("ProximityPrompt", true)
-					or (m:IsA("BasePart") and m:FindFirstChildWhichIsA("ProximityPrompt"))
-				local pos = m:IsA("Model") and m:GetPivot().Position or m.Position
-				if pp then
-					moveTo(CFrame.new(pos + Vector3.new(0, 0, 2)))
-					task.wait(0.4)
-					pcall(function() firePP(pp) end)
-					task.wait(0.8)
-					goto keyDone
-				end
-			end
-		end
-		task.wait(2)
-	end
-	::keyDone::
-	tpToNPCAndInteract("Librarian")
-	callSvc("QuestsService", "collect", "LostHouseKey")
-	task.wait(1)
-	notify("[Story] LostHouseKey done!")
-	return true
-end
-
-local function doBeachDelivery()
-	notify("[Story] Starting BeachDelivery...")
-	callSvc("ExplorativeQuestService", "Delivery", "BeachDelivery")
-	task.wait(1)
-	callSvc("QuestsService", "get_quest", "BeachDelivery", "yes")
-	task.wait(1)
-	local t0 = tick()
-	while tick() - t0 < 60 and storyQuestOn do
-		if not isQuestActive("BeachDelivery") then break end
-		for _, name in pairs({"Delivery NPC", "DeliveryNPC", "Porter", "Dockworker", "Beach NPC"}) do
-			local m, pp = findNPC(name)
-			if m and pp then
-				moveTo(m:GetPivot() + Vector3.new(0, 0, 3))
-				task.wait(0.4)
-				pcall(function() firePP(pp) end)
-				task.wait(0.8)
-				callSvc("QuestsService", "collect", "BeachDelivery")
-				task.wait(1)
-				goto beachDone
-			end
-		end
-		task.wait(3)
-	end
-	::beachDone::
-	pcall(function() callSvc("QuestsService", "collect", "BeachDelivery") end)
-	task.wait(1)
-	notify("[Story] BeachDelivery done!")
-	return true
-end
-
-local STORY_CHAIN = {
-	{ id = "StarterQuest",    fn = doStarterQuest,   once = true  },
-	{ id = "StarterWeapon",   fn = doStarterWeapon,  once = true  },
-	{ id = "ActivateNen",     fn = doActivateNen,    once = true  },
-	{ id = "TrainingSession", fn = doTrainingSession, once = false },
-	{ id = "LostHouseKey",    fn = doLostHouseKey,   once = false },
-	{ id = "BeachDelivery",   fn = doBeachDelivery,  once = false },
-}
-
-task.spawn(function()
-	while not dead do
-		if storyQuestOn and not storyQuestBusy then
-			storyQuestBusy = true
-			local didAny = false
-			for _, entry in ipairs(STORY_CHAIN) do
-				if not storyQuestOn then break end
-				local qid = entry.id
-				if not (entry.once and isStoryQuestDone(qid)) then
-					local ok, err = pcall(entry.fn)
-					if not ok then
-						notify("[Story] Error on " .. qid .. ": " .. tostring(err))
-					end
-					didAny = true
-					task.wait(2)
-				end
-				task.wait(0.5)
-			end
-			if not didAny then
-				notify("[Story] All story quests done or skipped!")
-				storyQuestOn = false
-				if C.storyAuto then pcall(function() C.storyAuto:Set(false) end) end
-			end
-			storyQuestBusy = false
-		end
-		task.wait(3)
-	end
-end)
-
--- ============================================================
--- CHESTS / FARM / PARRY / SKILLS / WEAPONS / TALENTS
--- ============================================================
-local chestOn = false
-task.spawn(function()
-	while not dead do
-		if chestOn and char() then
-			local found = false
-			for _, d in pairs(workspace:GetDescendants()) do
-				if d:IsA("ProximityPrompt") then
-					local m = d:FindFirstAncestorOfClass("Model")
-					if m and m.Name:lower():find("chest") then
-						found = true
-						char():PivotTo(m:GetPivot() + Vector3.new(0, 0, 3))
-						task.wait(0.35)
-						firePP(d)
-						task.wait(0.5)
-					end
-				end
-			end
-			if not found then task.wait(2) end
-		else
-			task.wait(1)
-		end
-	end
-end)
-
-task.spawn(function()
-	local wasFarm = false
-	while not dead do
-		if farmOn and char() then
-			wasFarm = true
-			local best, bd = nil, math.huge
-			local p = hrp() and hrp().Position or Vector3.new()
-			for _, m in pairs(workspace:GetChildren()) do
-				if m:IsA("Model") and m.Name == farmTarget and (m:GetAttribute("Health") or 0) > 0 then
-					local d = (m:GetPivot().Position - p).Magnitude
-					if d < bd then bd, best = d, m end
-				end
-			end
-			if best then
-				farmMob = best
-				while farmOn and best.Parent and (best:GetAttribute("Health") or 0) > 0 and char() do
-					swingAt(best)
-					task.wait(0.42)
-				end
-				farmMob = nil
-			else
-				farmMob = nil
-				task.wait(0.6)
-			end
-		else
-			if wasFarm then
-				wasFarm = false
-				landToGround()
-			end
-			task.wait(0.5)
-		end
-	end
-end)
-
-local parryOn, lastParry, parryRange, parryDelay = false, 0, 16, 0.32
-local function doParry()
-	if not CN then return end
-	if tick() - lastParry < 1.8 then return end
-	lastParry = tick()
-	CN.Defend:FireServer("BlockStart", false, os.clock(), nextRid())
-	task.delay(0.4, function() pcall(function() CN.Defend:FireServer("BlockEnd") end) end)
-end
-local function nearUs(m)
-	local h = hrp()
-	if not (m and m.Parent and h) then return false end
-	local ok2, mp = pcall(function() return (m:IsA("Model") and m:GetPivot() or m.CFrame).Position end)
-	return ok2 and (mp - h.Position).Magnitude <= parryRange
-end
-local watched = {}
-task.spawn(function()
-	while not dead do
-		if parryOn and char() then
-			local seen = {}
-			for _, m in pairs(workspace:GetDescendants()) do
-				if m:IsA("Model") and m:GetAttribute("NpcSwingEndsAt") ~= nil
-					and (m:GetAttribute("Health") or 0) > 0 and nearUs(m) then
-					seen[m] = true
-					if not watched[m] then
-						watched[m] = m:GetAttributeChangedSignal("NpcSwingEndsAt"):Connect(function()
-							if parryOn and nearUs(m) then
-								task.delay(parryDelay, function() if parryOn and nearUs(m) then doParry() end end)
-							end
-						end)
-					end
-				end
-			end
-			for m, c in pairs(watched) do
-				if not seen[m] or not m.Parent then watched[m] = nil pcall(function() c:Disconnect() end) end
-			end
-			task.wait(0.5)
-		else
-			task.wait(1)
-		end
-	end
-end)
-function bindCNLate(f)
-	bind(f.Swing.OnClientEvent:Connect(function(attacker)
-		if not parryOn then return end
-		local m = typeof(attacker) == "Instance" and attacker
-			or type(attacker) == "string" and workspace:FindFirstChild(attacker)
-		if not m or m == char() or attacker == lp.Name then return end
-		if nearUs(m) then doParry() end
-	end))
-end
-if CN then bindCNLate(CN) end
-
-local skillOn = false
-local function playerData()
-	local d = lp:FindFirstChild("Data")
-	local ss = d and d:FindFirstChild("SavesSlot")
-	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
-	return slot and slot:FindFirstChild("PlayerData")
-end
-local function equippedSkills()
-	local out, seen = {}, {}
-	local function add(n) if n and n ~= "" and not n:find("Empty") and not seen[n] then seen[n] = true out[#out+1] = n end end
-	local sk = playerData() and playerData():FindFirstChild("Skills")
-	if not sk then return out end
-	local un = sk:FindFirstChild("UnlockedSkills")
-	if un then
-		for _, x in pairs(un:GetChildren()) do add(x.Name) end
-		for n, v in pairs(un:GetAttributes()) do if v == true then add(n) end end
-	end
-	local eq = sk:FindFirstChild("EquippedNenSkills")
-	if eq then
-		for _, x in pairs(eq:GetChildren()) do add(x.Name) end
-		for _, v in pairs(eq:GetAttributes()) do if type(v) == "string" then add(v) end end
-	end
-	return out
-end
-task.spawn(function()
-	while not dead do
-		if skillOn and char() then
-			for _, s in pairs(equippedSkills()) do
-				callSvc("SkillsService", "UseSkill", s)
-				task.wait(0.7)
-			end
-			task.wait(3)
-		else
-			task.wait(1)
-		end
-	end
-end)
-
-local gripOn = false
-task.spawn(function()
-	while not dead do
-		if gripOn and farmMob and farmMob.Parent then
-			local hp = farmMob:GetAttribute("Health") or 0
-			if hp > 0 and hp <= 25 then
-				pcall(function() rem("Grip"):FireServer(farmMob) end)
-				task.wait(1.5)
-			end
-		end
-		task.wait(0.4)
-	end
-end)
-
-local Items = tryGameRequire(RS.Shared:FindFirstChild("Data") and RS.Shared.Data:FindFirstChild("InventoryItems"))
-local RARITY_ORDER2 = {Common=1, Uncommon=2, Rare=3, Special=4, Legendary=5, Mythical=6, Extraordinary=7}
-local function invFolder()
-	local d = lp:FindFirstChild("Data")
-	local ss = d and d:FindFirstChild("SavesSlot")
-	local slot = ss and ss:FindFirstChild(tostring(attr("SelectedSlot") or 1))
-	local pd = slot and slot:FindFirstChild("PlayerData")
-	return pd and pd:FindFirstChild("Inventory")
-end
-local function weapons()
-	local out = {}
-	local inv = invFolder()
-	if not (inv and Items and Items.ItemList) then return out end
-	for _, x in pairs(inv:GetChildren()) do
-		local def = Items.ItemList[x:GetAttribute("item_id")]
-		local data = def and def.Data
-		local dmg = data and data.ComboData and data.ComboData[1] and data.ComboData[1].Damage
-		if data and data.DamageStat then
-			table.insert(out, {
-				uuid = x:GetAttribute("uuid") or x.Name,
-				name = def.ItemName or x:GetAttribute("item_name") or x.Name,
-				dmg = tonumber(dmg) or 0, rarity = def.Rarity or "Common",
-			})
-		end
-	end
-	table.sort(out, function(a, b)
-		if a.dmg ~= b.dmg then return a.dmg > b.dmg end
-		return (RARITY_ORDER2[a.rarity] or 0) > (RARITY_ORDER2[b.rarity] or 0)
-	end)
-	return out
-end
-local autoWeapon, weaponChoice = false, nil
-local function equipWeapon(uuid)
-	callSvc("InventoryService", "put_in_hotbar", uuid, 1)
-	task.wait(0.4)
-	callSvc("InventoryService", "equip", uuid)
-	task.wait(0.5)
-	local c = char()
-	if c and not c:FindFirstChildOfClass("Tool") then
-		local h = c:FindFirstChildOfClass("Humanoid")
-		local t = lp.Backpack:FindFirstChildOfClass("Tool")
-		if h and t then h:EquipTool(t) end
-	end
-	return char() and char():FindFirstChildOfClass("Tool") ~= nil
-end
-task.spawn(function()
-	while not dead do
-		if autoWeapon and char() and not char():FindFirstChildOfClass("Tool") then
-			local w = weapons()
-			local pick = w[1]
-			if weaponChoice then
-				for _, x in pairs(w) do if x.name == weaponChoice then pick = x break end end
-			end
-			if pick then equipWeapon(pick.uuid) end
-		end
-		task.wait(1.5)
-	end
-end)
-
-local Talents = tryGameRequire(RS.Shared:FindFirstChild("Data") and RS.Shared.Data:FindFirstChild("Talents"))
-local RARITY_ORDER = {Common=1, Uncommon=2, Rare=3, Special=4, Legendary=5, Mythical=6, Extraordinary=7}
-local function rarityOf(id)
-	local t = Talents and Talents.List and Talents.List[id]
-	return t and t.Rarity or "Common"
-end
-local talentOn, talentReroll, talentMin = false, false, "Rare"
-local function pendingChoice()
-	local ok, c = pcall(function() return svc("TalentService", "GetChoice"):InvokeServer() end)
-	if ok and type(c) == "table" and type(c.Hand) == "table" then return c end
-end
-local function bestCard(hand)
-	local best, br = nil, -1
-	for _, id in pairs(hand) do
-		local r = RARITY_ORDER[rarityOf(id)] or 0
-		if r > br then br, best = r, id end
-	end
-	return best, br
-end
-task.spawn(function()
-	while not dead do
-		if talentOn then
-			local c = pendingChoice()
-			if c then
-				local best, br = bestCard(c.Hand)
-				local want = RARITY_ORDER[talentMin] or 3
-				if talentReroll and br < want and (attr("Jenni") or 0) >= 10000 then
-					callSvc("TalentService", "RerollHand")
-					task.wait(1)
-				elseif best then
-					notify("Picking " .. best)
-					callSvc("TalentService", "Choose", best)
-				end
-			end
-			task.wait(2.5)
-		else
-			task.wait(1)
-		end
-	end
-end)
-
-local alertOn, lastAlert = false, 0
-task.spawn(function()
-	while not dead do
-		if alertOn and hrp() and tick() - lastAlert > 8 then
-			local p = hrp().Position
-			for _, pl in pairs(Players:GetPlayers()) do
-				local c = pl ~= lp and pl.Character
-				if c then
-					local d = (c:GetPivot().Position - p).Magnitude
-					if d < 60 then
-						lastAlert = tick()
-						notify("Player nearby: " .. pl.Name)
-						break
-					end
-				end
-			end
-			task.wait(2)
-		else
-			task.wait(2)
-		end
-	end
-end)
-
-local fbOn, fbOld = false, nil
-local function setFB(v)
-	local L = Lighting
-	if v then
-		fbOld = {ClockTime=L.ClockTime, GlobalShadows=L.GlobalShadows, FogEnd=L.FogEnd, Brightness=L.Brightness}
-		L.ClockTime, L.GlobalShadows, L.FogEnd, L.Brightness = 14, false, 1e6, 3
-	elseif fbOld then
-		L.ClockTime, L.GlobalShadows, L.FogEnd, L.Brightness = fbOld.ClockTime, fbOld.GlobalShadows, fbOld.FogEnd, fbOld.Brightness
-	end
-end
-
-local mineOn = false
-local function oreNodes()
-	local out = {}
-	local world = workspace:FindFirstChild("World")
-	local map = world and world:FindFirstChild("Map")
-	for _, m in pairs((map or workspace):GetDescendants()) do
-		if m:IsA("Model") then
-			local n = m.Name:lower()
-			if (n:match("ore") or n:match("rock") or n:match("node")) and not n:find("showcase") and not n:find("character") then
-				out[#out+1] = m
-			end
-		end
-	end
-	return out
-end
-task.spawn(function()
-	while not dead do
-		if mineOn and char() then
-			local nodes = oreNodes()
-			for _, n in pairs(nodes) do
-				if not mineOn or not char() then break end
-				if n.Parent then
-					char():PivotTo(n:GetPivot() + Vector3.new(0, 0, 3))
-					task.wait(0.6)
-					for i = 1, 4 do callSvc("MaterialService", "Mine") task.wait(0.5) end
-				end
-			end
-			task.wait(2)
-		else
-			task.wait(1.5)
-		end
-	end
-end)
-
-local fishOn, fishSession = false, nil
-pcall(function()
-	bind(svc("FishingService", "Cast").Parent.Parent.RE.Bite.OnClientEvent:Connect(function(id)
-		fishSession = id or fishSession
-	end))
-end)
-task.spawn(function()
-	while not dead do
-		if fishOn and char() and hrp() then
-			local ok, a, b, sid = pcall(function()
-				return svc("FishingService", "Cast"):InvokeServer(hrp().Position + hrp().CFrame.LookVector * 8)
-			end)
-			if ok then fishSession = sid or b or a end
-			local t0 = tick()
-			while fishOn and tick() - t0 < 8 do task.wait(0.3) end
-			if fishSession then
-				pcall(function() svc("FishingService", "Reel"):InvokeServer(fishSession) end)
-				fishSession = nil
-			end
-			task.wait(1)
-		else
-			task.wait(1.5)
-		end
-	end
-end)
-
-local medOn = false
-pcall(function()
-	bind(svc("MeditationService", "StartMeditation").Parent.Parent.RE.KeyPrompt.OnClientEvent:Connect(function(id)
-		callSvc("MeditationService", "KeyPromptResult", id, true)
-	end))
-end)
-task.spawn(function()
-	while not dead do
-		if medOn and char() and hrp() then
-			local mp = workspace:FindFirstChild("MeditationParts")
-			local spot = mp and mp:FindFirstChildWhichIsA("BasePart", true)
-			if spot then
-				char():PivotTo(spot.CFrame + Vector3.new(0, 2, 0))
-				task.wait(0.5)
-				callSvc("MeditationService", "PlaceCarpet", spot.Position)
-				task.wait(0.5)
-				callSvc("MeditationService", "StartMeditation")
-				local t0 = tick()
-				while medOn and tick() - t0 < 25 do task.wait(1) end
-				callSvc("MeditationService", "StopMeditation")
-				callSvc("MeditationService", "UnplaceCarpet")
-			else
-				task.wait(3)
-			end
-		else
-			task.wait(1.5)
-		end
-	end
-end)
-
-pcall(function()
-	bind(svc("InventoryService", "equip").Parent.Parent.RE.ItemAdded.OnClientEvent:Connect(function(...)
-		local a = {...}
-		local parts = {}
-		for _, v in pairs(a) do parts[#parts+1] = tostring(type(v) == "table" and (v.item_name or v.Name or v) or v) end
-		notify("Loot: " .. table.concat(parts, ", "))
-	end))
-end)
-
--- ============================================================
--- UI BUILD (Using Bundled Library)
--- ============================================================
-task.delay(0.5, function()
-	local tProg   = window:AddTab("Progression")
-	local tStory  = window:AddTab("Story Quests")
-	local tBoards = window:AddTab("Board Quests")
-	local tCombat = window:AddTab("Combat")
-	local tFarm   = window:AddTab("Farm")
-	local tMove   = window:AddTab("Movement")
-	local tVis    = window:AddTab("Visuals")
-	local tCred   = window:AddTab("Credits")
-
-	-- Progression
-	local s3 = tProg:Section("Utility")
-	C.meditate = s3:Toggle({Text="Auto Meditate", Default=false, Callback=function(v) medOn=v end})
-	s3:Button({Text="AFK Chamber", Callback=function() callSvc("AfkTransferService","RequestAfkTransfer") end})
-	s3:Button({Text="Respawn", Callback=function() callSvc("DeathService","Respawn") end})
-
-	local s3b = tProg:Section("Talent Cards")
-	C.talentAuto = s3b:Toggle({Text="Auto-Pick Best Card", Default=false, Callback=function(v) talentOn=v end})
-	C.talentMin  = s3b:Dropdown({Text="Reroll Until", Options={"Uncommon","Rare","Special","Legendary","Mythical","Extraordinary"}, Default="Rare", Callback=function(v) talentMin=v end})
-	C.talentReroll = s3b:Toggle({Text="Auto Reroll", Default=false, Callback=function(v) talentReroll=v end})
-	s3b:Button({Text="Pick Best Card Now", Callback=function()
-		local c = pendingChoice()
-		if c then
-			local b = bestCard(c.Hand)
-			if b then notify("Picking " .. b) callSvc("TalentService","Choose",b) end
-		else notify("No pending talent choice") end
-	end})
-
-	-- Story Quests
-	local sStory = tStory:Section("Story Quest Automation")
-	sStory:Label("Auto-completes all story quests in order.")
-	C.storyAuto = sStory:Toggle({
-		Text = "Auto Story Quests",
-		Default = false,
-		Callback = function(v)
-			storyQuestOn = v
-			if v then notify("[Story] Auto Story Quests enabled")
-			else notify("[Story] Auto Story Quests stopped"); storyQuestBusy = false end
-		end
-	})
-
-	-- Board Quests
-	local s4b = tBoards:Section("Auto Quest")
-	local allQuests = {
-		"KillForestBrawler","KillCaveBrawler","KillMoleRat","KillFoxBearHunter","KillBlackBlick",
-		"KillBeachBrawler","KillFoxBear","KillPortInvader","KillPortMarksman","KillFireMaster",
-		"KillAngryFarmer","KillChiefFarmer","KillFarmKeeper","KillPhantomGoon","KillStoneSoldier",
-		"KillPurpleViper","KillSwampViper","KillFireSpirits","KillFrostFang","KillFrozenVanguard",
-		"KillShiverWarrior","KillFrostyFox","KillIceSpirit","KillFalseHunter","KillArcticPhantom","KillSandTank"
-	}
-	table.sort(allQuests)
-	C.quest = s4b:Dropdown({Text="Select Quest", Options=allQuests, Default=allQuests[1], Callback=function(v) questId=v end})
-	C.autoQuest = s4b:Toggle({Text="Auto Quest", Default=false, Callback=function(v) autoQuest=v end})
-
-	-- Combat
-	local sCombat = tCombat:Section("Combat")
-	C.aura = sCombat:Toggle({Text="Kill Aura", Default=false, Callback=function(v) auraOn=v end})
-	C.parry = sCombat:Toggle({Text="Auto Parry", Default=false, Callback=function(v) parryOn=v end})
-	C.parryRange = sCombat:Slider({Text="Parry Range", Min=8, Max=30, Default=16, Callback=function(v) parryRange=v end})
-	C.parryDelay = sCombat:Slider({Text="Parry Timing", Min=20, Max=60, Default=32, Callback=function(v) parryDelay=v/100 end})
-	C.skills = sCombat:Toggle({Text="Auto Skills", Default=false, Callback=function(v) skillOn=v end})
-	C.grip = sCombat:Toggle({Text="Auto Grip", Default=false, Callback=function(v) gripOn=v end})
-
-	local sWeap = tCombat:Section("Weapon")
-	local wNames, wByName = {}, {}
-	for _, w in pairs(weapons()) do
-		local lbl = w.name .. " (" .. w.dmg .. " dmg)"
-		wNames[#wNames+1] = lbl; wByName[lbl] = w
-	end
-	if #wNames == 0 then wNames = {"Fists"} end
-	C.weaponByName = wByName
-	C.weapon = sWeap:Dropdown({Text="Weapon", Options=wNames, Default=wNames[1], Callback=function(v)
-		local w = wByName[v]
-		if w then weaponChoice = w.name end
-	end})
-	sWeap:Button({Text="Equip Selected", Callback=function()
-		local w = weaponChoice and (function() for _, x in pairs(weapons()) do if x.name == weaponChoice then return x end end end)() or weapons()[1]
-		if w then
-			local ok = equipWeapon(w.uuid)
-			notify(ok and ("Equipped " .. w.name) or "Equip failed")
-		end
-	end})
-	C.autoWeapon = sWeap:Toggle({Text="Auto-Equip Best", Default=false, Callback=function(v) autoWeapon=v end})
-
-	-- Farm
-	local s4 = tFarm:Section("Auto Farm")
-	C.farmTarget = s4:Dropdown({
-		Text="Target",
-		Options={"Forest Brawler","Cave Brawler","Mole Rat","Foxbear Hunter","Black Blick","Fox Bear",
-				 "Beach Brawler","Port Marksman","Port Invader","Angry Farmer","Chief Farmer",
-				 "Farm Keeper","Phantom Goon","Stone Soldier","Purple Viper","Swamp Viper",
-				 "Fire Spirit","Frost Fang","Frozen Vanguard","Shiver Warrior","Frosty Fox",
-				 "Ice Spirit","False Hunter","Arctic Phantom","Sand Tank","Fire Master"},
-		Default="Forest Brawler",
-		Callback=function(v) farmTarget=v end
-	})
-	C.farmPos = s4:Dropdown({Text="Position", Options={"Above","Behind","Below"}, Default="Above", Callback=function(v)
-		farmPos=v
-		if v=="Below" and C.farmFloat then C.farmFloat:Set(true) end
-	end})
-	C.farmDist = s4:Slider({Text="Distance", Min=3, Max=40, Default=8, Callback=function(v) farmDist=v end})
-	C.farmYOff = s4:Slider({Text="Y Offset", Min=-15, Max=30, Default=0, Callback=function(v) farmYOff=v end})
-	C.farmFloat = s4:Toggle({Text="Float", Default=true, Callback=function(v) farmFloat=v end})
-	C.farm = s4:Toggle({Text="Auto Farm", Default=false, Callback=function(v)
-		farmOn=v auraOn=v
-		if C.aura then C.aura:Set(v) end
-		notify(v and ("Farming " .. farmTarget) or "Farm off")
-	end})
-	C.antiAFK = s4:Toggle({Text="Anti-AFK", Default=false, Callback=function(v) setAntiAFK(v) end})
-	C.alert = s4:Toggle({Text="Player Alert", Default=false, Callback=function(v) alertOn=v end})
-
-	local s4c = tFarm:Section("Chests")
-	C.chests = s4c:Toggle({Text="Auto Chests", Default=false, Callback=function(v) chestOn=v end})
-
-	local s4d = tFarm:Section("Gathering")
-	C.mine = s4d:Toggle({Text="Auto Mine", Default=false, Callback=function(v) mineOn=v end})
-	C.fish = s4d:Toggle({Text="Auto Fish", Default=false, Callback=function(v) fishOn=v end})
-
-	-- Movement
-	local s5 = tMove:Section("Movement")
-	C.noclip = s5:Toggle({Text="Noclip", Default=false, Callback=function(v) noclipOn=v end})
-	C.fly = s5:Toggle({Text="Fly", Default=false, Callback=function(v) flyOn=v end})
-	C.flySpeed = s5:Slider({Text="Fly Speed", Min=20, Max=150, Default=60, Callback=function(v) flySpeed=v end})
-	C.infJump = s5:Toggle({Text="Infinite Jump", Default=false, Callback=function(v) infJumpOn=v end})
-	C.clickTP = s5:Toggle({Text="Click TP", Default=false, Callback=function(v) clickTPOn=v end})
-	C.ws = s5:Toggle({Text="WalkSpeed", Default=false, Callback=function(v) wsOn=v end})
-	C.wsVal = s5:Slider({Text="WalkSpeed Value", Min=16, Max=120, Default=40, Callback=function(v) wsVal=v end})
-
-	local s5b = tMove:Section("Travel")
-	local cfNames, cfChoice = {}, "Campfire10"
-	do
-		local uc = playerData() and playerData():FindFirstChild("UnlockedCampfires")
-		if uc then for _, x in pairs(uc:GetChildren()) do cfNames[#cfNames+1] = x.Name end end
-		table.sort(cfNames)
-		if #cfNames == 0 then cfNames = {"Campfire10"} end
-		cfChoice = cfNames[1]
-	end
-	C.campfire = s5b:Dropdown({Text="Campfire", Options=cfNames, Default=cfNames[1], Callback=function(v) cfChoice=v end})
-	s5b:Button({Text="Fast Travel", Callback=function()
-		callSvc("CampfireService","FastTravel",cfChoice)
-		notify("Fast travel " .. cfChoice)
-	end})
-	s5b:Button({Text="Set Spawn", Callback=function()
-		callSvc("CampfireService","SetSpawn",cfChoice)
-		notify("Spawn set: " .. cfChoice)
-	end})
-	s5b:Button({Text="Teleport to Spawn", Callback=function()
-		local sp = workspace:FindFirstChildOfClass("SpawnLocation")
-		if sp then moveTo(sp.CFrame + Vector3.new(0,5,0)) notify("Teleported to spawn") end
-	end})
-	s5b:Button({Text="Server Hop", Callback=function()
-		notify("Hopping server...")
-		pcall(function() TeleportService:Teleport(game.PlaceId, lp) end)
-	end})
-
-	-- Visuals
-	local s6 = tVis:Section("ESP")
-	C.esp_players = s6:Toggle({Text="Players", Default=false, Callback=function(v) espOn.players=v refreshESP() end})
-	C.esp_mobs = s6:Toggle({Text="Mobs & Bosses", Default=false, Callback=function(v) espOn.mobs=v refreshESP() end})
-	C.esp_chests = s6:Toggle({Text="Chests", Default=false, Callback=function(v) espOn.chests=v refreshESP() end})
-	C.esp_bosses = s6:Toggle({Text="Boss Timers", Default=false, Callback=function(v) espOn.bosses=v refreshESP() end})
-	s6:Toggle({Text="Fullbright", Default=false, Callback=function(v) setFB(v) end})
-
-	-- Credits
-	local s7 = tCred:Section("Credits")
-	s7:Label("Zentynal Hub v3 (Bundled Library)")
-	s7:Button({Text="Unload Hub", Danger=true, Callback=function()
-		if ENV.ZentynalHub then ENV.ZentynalHub.Destroy() end
-	end})
-	local s8 = tCred:Section("Config")
-	s8:Button({Text="Save Config", Callback=function() saveConfig() notify("Config saved") end})
-end)
-
-local function destroy()
-	dead = true
-	storyQuestOn = false
-	farmMob = nil
-	local c = char()
-	if c then for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = true end end end
-	for _,c in pairs(connections) do pcall(function() c:Disconnect() end) end
-	for _,c in pairs(watched) do pcall(function() c:Disconnect() end) end
-	for _,i in pairs(injected) do pcall(function() i:Destroy() end) end
-	setAntiAFK(false); clearESP(); setFB(false)
-	pcall(function() if window.Gui then window.Gui:Destroy() end end)
-end
-ENV.ZentynalHub = {Destroy = destroy, Window = window}
-print("[Zentynal] hub v3 loaded (Bundled Library)")
+return Library
