@@ -126,6 +126,9 @@ local window = lib.CreateWindow({
 	Size      = UDim2.fromOffset(900, 600),
 })
 
+-- ═══════════════════════════════════════════════════════════════════════
+-- Shadow Fix (Stops the black box when UI is closed)
+-- ═══════════════════════════════════════════════════════════════════════
 local originalSetOpen = window.SetOpen
 function window:SetOpen(visible)
     originalSetOpen(self, visible)
@@ -135,6 +138,144 @@ function window:SetOpen(visible)
         end
     end
 end
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- Discord Promo Popup
+-- ═══════════════════════════════════════════════════════════════════════
+task.spawn(function()
+    task.wait(0.5)
+    
+    local INVITE_LINK = "https://discord.gg/8nsm67njG"
+    local T = lib.Theme or {}
+    
+    local function mk(className, props, parent)
+        local inst = Instance.new(className)
+        for k, v in pairs(props) do inst[k] = v end
+        if parent then inst.Parent = parent end
+        return inst
+    end
+    
+    local parent = (type(gethui) == "function" and gethui()) or game:GetService("CoreGui")
+    
+    local gui = mk("ScreenGui", {
+        Name = "BNH_Promo",
+        DisplayOrder = 999999,
+        IgnoreGuiInset = true,
+        ResetOnSpawn = false
+    }, parent)
+    
+    local bg = mk("Frame", {
+        BackgroundColor3 = Color3.new(0,0,0),
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+    }, gui)
+    
+    local modal = mk("Frame", {
+        BackgroundColor3 = T.panel or Color3.fromRGB(16, 24, 20),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(420, 260),
+        BorderSizePixel = 0,
+    }, bg)
+    mk("UICorner", { CornerRadius = UDim.new(0, 12) }, modal)
+    mk("UIStroke", { Color = T.accent or Color3.fromRGB(52, 211, 153), Thickness = 1, Transparency = 0.5 }, modal)
+    mk("UIGradient", { Color = ColorSequence.new(T.panel or Color3.fromRGB(16, 24, 20), T.panelHi or Color3.fromRGB(20, 30, 26)), Rotation = 45 }, modal)
+    
+    local title = mk("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(0, 30),
+        Size = UDim2.new(1, 0, 0, 30),
+        Font = Enum.Font.GothamBold,
+        Text = "Join the Discord!",
+        TextColor3 = T.text or Color3.fromRGB(240, 255, 248),
+        TextSize = 22,
+    }, modal)
+    
+    local desc = mk("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(20, 65),
+        Size = UDim2.new(1, -40, 0, 40),
+        Font = Enum.Font.Gotham,
+        Text = "For updates, support, and to hang out with the community. Click below to copy the invite link.",
+        TextColor3 = T.textDim or Color3.fromRGB(148, 176, 160),
+        TextSize = 14,
+        TextWrapped = true,
+    }, modal)
+    
+    local copyBtn = mk("TextButton", {
+        BackgroundColor3 = T.panelAlt or Color3.fromRGB(24, 36, 30),
+        Position = UDim2.fromOffset(40, 120),
+        Size = UDim2.new(1, -80, 0, 36),
+        Font = Enum.Font.GothamBold,
+        Text = "Copy Link",
+        TextColor3 = T.accent or Color3.fromRGB(52, 211, 153),
+        TextSize = 14,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+    }, modal)
+    mk("UICorner", { CornerRadius = UDim.new(0, 6) }, copyBtn)
+    mk("UIStroke", { Color = T.accentDim or Color3.fromRGB(16, 185, 129), Thickness = 1, Transparency = 0.5 }, copyBtn)
+    
+    local closeBtn = mk("TextButton", {
+        BackgroundColor3 = T.off or Color3.fromRGB(34, 48, 40),
+        Position = UDim2.fromOffset(40, 175),
+        Size = UDim2.new(1, -80, 0, 36),
+        Font = Enum.Font.GothamBold,
+        Text = "Close (5)",
+        TextColor3 = T.textDim or Color3.fromRGB(148, 176, 160),
+        TextSize = 14,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+    }, modal)
+    mk("UICorner", { CornerRadius = UDim.new(0, 6) }, closeBtn)
+    
+    -- Fade in
+    gui.Enabled = true
+    local TweenService = game:GetService("TweenService")
+    TweenService:Create(bg, TweenInfo.new(0.3), { BackgroundTransparency = 0.4 }):Play()
+    modal.Size = UDim2.fromOffset(380, 220)
+    TweenService:Create(modal, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(420, 260) }):Play()
+    
+    -- Copy functionality
+    copyBtn.MouseButton1Click:Connect(function()
+        if type(setclipboard) == "function" then
+            setclipboard(INVITE_LINK)
+        elseif type(toclipboard) == "function" then
+            toclipboard(INVITE_LINK)
+        elseif type(set_clipboard) == "function" then
+            set_clipboard(INVITE_LINK)
+        end
+        copyBtn.Text = "Copied!"
+        copyBtn.TextColor3 = T.cyan or Color3.fromRGB(167, 243, 208)
+        task.delay(2, function()
+            if copyBtn and copyBtn.Parent then
+                copyBtn.Text = "Copy Link"
+                copyBtn.TextColor3 = T.accent or Color3.fromRGB(52, 211, 153)
+            end
+        end)
+    end)
+    
+    -- 5 second close timer
+    local canClose = false
+    task.spawn(function()
+        for i = 5, 1, -1 do
+            closeBtn.Text = "Close (" .. i .. ")"
+            task.wait(1)
+        end
+        closeBtn.Text = "Close"
+        closeBtn.BackgroundColor3 = T.accent or Color3.fromRGB(52, 211, 153)
+        closeBtn.TextColor3 = Color3.new(1, 1, 1)
+        canClose = true
+    end)
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        if not canClose then return end
+        TweenService:Create(bg, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(modal, TweenInfo.new(0.2), { Size = UDim2.fromOffset(380, 220), BackgroundTransparency = 1 }):Play()
+        task.wait(0.2)
+        gui:Destroy()
+    end)
+end)
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
 -- ═══════════════════════════════════════════════════════════════════════
