@@ -126,6 +126,16 @@ local window = lib.CreateWindow({
 	Size      = UDim2.fromOffset(900, 600),
 })
 
+local originalSetOpen = window.SetOpen
+function window:SetOpen(visible)
+    originalSetOpen(self, visible)
+    for _, obj in ipairs(self.Screen:GetChildren()) do
+        if obj.Name:find("Shadow") then
+            obj.Visible = visible
+        end
+    end
+end
+
 local function notify(msg) pcall(function() window:Notify(msg) end) end
 -- ═══════════════════════════════════════════════════════════════════════
 
