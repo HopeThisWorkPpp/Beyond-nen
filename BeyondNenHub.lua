@@ -1,14 +1,5 @@
 -- filename: BeyondNenHub.lua
 -- Beyond Nen Hub — Zentynal UI
-
-local function _aWU3LmIhjg(MYTHIOS, ...)
-local _trWaQDQOWtwUpHAI = {0x431a0c08-0x431a0c08}
-local function _iBbAjHl()
-  if type(MYTHIOS) ~= "table" or type(MYTHIOS.verify) ~= "function" then return false end
-  local _j3J1sGhc = MYTHIOS.verify()
-  return _j3J1sGhc
-end
-if not _iBbAjHl() then local w = warn or print; w("[Zentynal] integrity"); return end
 do
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -2391,6 +2382,3 @@ ENV.BNH = {
 }
 print("[BNH] hub loaded (Zentynal UI)")
 end
-if not _iBbAjHl() then local w = warn or print; w("[Zentynal] integrity"); return end
-end
-return _aWU3LmIhjg
