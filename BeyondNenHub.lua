@@ -17,7 +17,10 @@ local lp = Players.LocalPlayer
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
 ENV.BeyondNenHub = ENV.BeyondNenHub or nil
 if ENV.BeyondNenHub and ENV.BeyondNenHub.Destroy then pcall(ENV.BeyondNenHub.Destroy) end
-local ok, hui = pcall(function() return gethui() end)
+
+-- Cleanup old windows instantly (no task.defer)
+do
+	local ok, hui = pcall(function() return gethui() end)
 	if ok and hui then
 		for _, d in ipairs(hui:GetChildren()) do
 			if d:IsA("ScreenGui") and (d.Name:sub(1, 4) == "PLUI"
