@@ -119,6 +119,22 @@ local function loadZentynal()
 end
 
 local lib = loadZentynal()
+lib.SetTheme({
+    bg = Color3.fromRGB(24, 30, 28),
+    bgHi = Color3.fromRGB(32, 40, 36),
+    panel = Color3.fromRGB(30, 40, 36),
+    panelHi = Color3.fromRGB(38, 50, 44),
+    panelAlt = Color3.fromRGB(44, 58, 50),
+    sidebar = Color3.fromRGB(20, 26, 24),
+    sidebarHi = Color3.fromRGB(28, 36, 32),
+    stroke = Color3.fromRGB(60, 80, 70),
+    strokeHi = Color3.fromRGB(80, 110, 94),
+    text = Color3.fromRGB(255, 255, 255),
+    textDim = Color3.fromRGB(180, 200, 190),
+    tabIdle = Color3.fromRGB(20, 26, 24),
+    tabHover = Color3.fromRGB(40, 56, 48),
+    off = Color3.fromRGB(40, 50, 44),
+})
 local window = lib.CreateWindow({
 	Title     = "Beyond Nen",
 	Subtitle  = "Hub",
