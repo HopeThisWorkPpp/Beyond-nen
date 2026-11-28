@@ -17,18 +17,18 @@ local lp = Players.LocalPlayer
 local ENV = (type(getgenv) == "function" and getgenv()) or _G
 ENV.BeyondNenHub = ENV.BeyondNenHub or nil
 if ENV.BeyondNenHub and ENV.BeyondNenHub.Destroy then pcall(ENV.BeyondNenHub.Destroy) end
-task.defer(function()
-	local ok, hui = pcall(function() return gethui() end)
-	if not (ok and hui) then return end
-	for _, d in ipairs(hui:GetChildren()) do
-		if d:IsA("ScreenGui") and (d.Name:sub(1, 4) == "PLUI"
-			or d.Name == "ZentynalWindow"
-			or d.Name == "BeyondNenHub"
-			or d.Name == "BeyondNenHubHint") then
-			pcall(function() d:Destroy() end)
+local ok, hui = pcall(function() return gethui() end)
+	if ok and hui then
+		for _, d in ipairs(hui:GetChildren()) do
+			if d:IsA("ScreenGui") and (d.Name:sub(1, 4) == "PLUI"
+				or d.Name == "ZentynalWindow"
+				or d.Name == "BeyondNenHub"
+				or d.Name == "BeyondNenHubHint") then
+				pcall(function() d:Destroy() end)
+			end
 		end
 	end
-end)
+end
 local function isFn(x) return type(x) == "function" end
 local function safeGetHui()
 	if isFn(gethui) then local ok, h = pcall(gethui) if ok and h then return h end end
