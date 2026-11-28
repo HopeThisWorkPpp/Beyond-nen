@@ -106,7 +106,7 @@ local window = lib.CreateWindow({
 	ToggleKey = Enum.KeyCode.RightShift
 })
 
-window:SetProfile(lp.Name, "Free", lp.UserId)
+-- [FIX 1] Removed: window:SetProfile(lp.Name, "Free", lp.UserId) -- method doesn't exist in ZentynalLib
 
 local function notify(msg) pcall(function() window:Notify(msg) end) end
 
@@ -1937,15 +1937,11 @@ requireMethod(window, "Notify", "window")
 requireMethod(window, "Destroy", "window")
 
 local tHome = window:AddTab("Home", "home")
-requireMethod(tHome, "AddGrid", "tab")
 requireMethod(tHome, "Section", "tab")
 print("[Z DEBUG] Home tab created")
 
-local gHome = tHome:AddGrid()
-requireMethod(gHome, "Section", "grid")
-print("[Z DEBUG] Home grid created")
-
-local sAbout = gHome:Section("About")
+-- [FIX 2] Removed AddGrid() — new lib uses flat tab:Section() calls
+local sAbout = tHome:Section("About")
 for _, methodName in ipairs({"Label", "Toggle", "Slider", "Dropdown", "TextBox", "Button"}) do
 	requireMethod(sAbout, methodName, "section")
 end
@@ -1954,16 +1950,15 @@ sAbout:Label("Version v3.0.0")
 sAbout:Label("Updated 2026-11-25")
 sAbout:Label("Status Rewrite")
 
-local sUpdates = gHome:Section("Latest Updates")
+local sUpdates = tHome:Section("Latest Updates")
 sUpdates:Label("Changelog v3.0.0")
 sUpdates:Label("· Rebuilt from the ground up for the latest version")
 sUpdates:Label("· Auto Mine stands beside rocks instead of hiding under them")
 sUpdates:Label("· Travel walks the real route at full speed")
 
-local gExec = tHome:AddGrid()
-local sExec = gExec:Section("Executor")
+local sExec = tHome:Section("Executor")
 sExec:Label("Executor: Delta")
-local sStatus = gExec:Section("Status")
+local sStatus = tHome:Section("Status")
 sStatus:Label("Client FPS: live")
 sStatus:Label("Server ping: live")
 
