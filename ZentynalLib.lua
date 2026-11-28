@@ -1,8 +1,3 @@
--- ZentynalLib.lua
--- Zentynal UI Library V6 (Full + Polish)
--- Drop-in for YourNenHub.
--- Shadow, gradients, tab accent bar, brand fallback, reopen pill,
--- ContextActionService toggle, mobile scaling, popup layer, toasts.
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
