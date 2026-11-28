@@ -74,29 +74,40 @@ if not isFn(firePP) then
 	end
 end
 
--- ── BULLETPROOF UI LOADER ────────────────────────────────────────────────
+-- ── FIXED UI LOADER ──────────────────────────────────────────────────────
 local lib
-local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua"
-local ok, res = pcall(function() return game:HttpGet(url) end)
+print("[Z DEBUG] Loading UI Library...")
 
-if ok and type(res) == "string" and #res > 1000 then
-	local fn, err = loadstring(res)
-	if type(fn) == "function" then
-		local ok2, l = pcall(fn)
-		if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
-			lib = l
-		else
-			warn("[Zentynal Hub] Lib runtime fail: " .. tostring(l))
-		end
-	else
-		warn("[Zentynal Hub] Lib compile fail: " .. tostring(err))
-	end
+-- Try local file first (since we know HttpGet fails on Delta sometimes)
+local ok_local, local_lib = pcall(function() return loadstring(readfile("ZentynalLib.lua"))() end)
+if ok_local and type(local_lib) == "table" and local_lib.CreateWindow then
+    print("[Z DEBUG] Local UI loaded successfully!")
+    lib = local_lib
 else
-	warn("[Zentynal Hub] GitHub fetch failed.")
+    print("[Z DEBUG] Local UI failed/missing. Trying GitHub...")
+    local url = "https://raw.githubusercontent.com/HopeThisWorkPpp/Beyond-nen/main/ZentynalLib.lua"
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    
+    if ok and type(res) == "string" and #res > 1000 then
+        local fn, err = loadstring(res)
+        if type(fn) == "function" then
+            local ok2, l = pcall(fn)
+            if ok2 and type(l) == "table" and type(l.CreateWindow) == "function" then
+                print("[Z DEBUG] GitHub UI loaded successfully!")
+                lib = l
+            else
+                warn("[Zentynal Hub] Lib runtime fail: " .. tostring(l))
+            end
+        else
+            warn("[Zentynal Hub] Lib compile fail: " .. tostring(err))
+        end
+    else
+        warn("[Zentynal Hub] GitHub fetch failed. (HttpGet blocked?)")
+    end
 end
 
 if not lib then
-	error("[Zentynal Hub] Failed to load ZentynalLib. Ensure the GitHub URL is correct and the file is pushed.")
+	error("[Zentynal Hub] CRITICAL: Failed to load ZentynalLib.lua")
 end
 -- ─────────────────────────────────────────────────────────────────────────
 
